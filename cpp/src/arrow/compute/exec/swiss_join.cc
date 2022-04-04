@@ -20,6 +20,7 @@
 #include <algorithm>  // std::upper_bound
 #include <cstdio>
 #include <cstdlib>
+#include <iostream>
 #include <mutex>
 #include "arrow/array/util.h"  // MakeArrayFromScalar
 #include "arrow/compute/exec/hash_join.h"
@@ -542,6 +543,7 @@ Status ExecBatchBuilder::AppendSelected(MemoryPool* pool, const ExecBatch& batch
 
 Status ExecBatchBuilder::AppendNulls(MemoryPool* pool,
                                      const std::vector<std::shared_ptr<DataType>>& types,
+                                     int num_ignored_columns,
                                      int num_rows_to_append) {
   if (num_rows_to_append == 0) {
     return Status::OK();
@@ -556,15 +558,16 @@ Status ExecBatchBuilder::AppendNulls(MemoryPool* pool,
     }
   }
 
-  for (size_t i = 0; i < values_.size(); ++i) {
+  for (size_t i = num_ignored_columns; i < values_.size(); ++i) {
     RETURN_NOT_OK(AppendNulls(types[i], values_[i], num_rows_to_append, pool));
   }
 
   return Status::OK();
 }
 
-Status ExecBatchBuilder::AppendNulls(MemoryPool* pool,
+/*Status ExecBatchBuilder::AppendNulls(MemoryPool* pool,
                                      const std::vector<std::shared_ptr<DataType>>& types,
+                                     int num_ignored_columns,
                                      int num_rows_to_append, int* num_appended) {
   *num_appended = 0;
   if (num_rows_to_append == 0) {
@@ -580,17 +583,18 @@ Status ExecBatchBuilder::AppendNulls(MemoryPool* pool,
   RETURN_NOT_OK(AppendNulls(pool, types, num_rows_next));
   *num_appended = num_rows_next;
   return Status::OK();
-}
+}*/
 
-ExecBatch ExecBatchBuilder::Flush() {
+std::vector<ResizableArrayData> ExecBatchBuilder::Flush() {
   ARROW_DCHECK(num_rows() > 0);
-  ExecBatch out({}, num_rows());
+  /*ExecBatch out({}, num_rows());
   out.values.resize(values_.size());
   for (size_t i = 0; i < values_.size(); ++i) {
     out.values[i] = values_[i].array_data();
     values_[i].Clear(true);
   }
-  return out;
+  return out;*/
+  return std::move(values_);
 }
 
 int RowArrayAccessor::VarbinaryColumnId(const KeyEncoder::KeyRowMetadata& row_metadata,
@@ -2092,10 +2096,18 @@ void JoinResultMaterialize::Init(MemoryPool* pool,
   auto to_payload =
       probe_schemas_->map(HashJoinProjection::OUTPUT, HashJoinProjection::PAYLOAD);
   for (int i = 0; static_cast<size_t>(i) < probe_output_to_key_and_payload_.size(); ++i) {
-    probe_output_to_key_and_payload_[i] =
-        to_key.get(i) == SchemaProjectionMap::kMissingField
+    //probe_output_to_key_and_payload_[i] =
+        /*to_key.get(i) == SchemaProjectionMap::kMissingField
             ? to_payload.get(i) + num_key_cols
-            : to_key.get(i);
+            : to_key.get(i);*/
+
+        if (to_key.get(i) == SchemaProjectionMap::kMissingField) {
+          std::cout << "Probe Payload " << i << std::endl;
+          probe_output_to_key_and_payload_[i] = to_payload.get(i) + num_key_cols;
+        } else {
+          std::cout << "Probe Key " << i << std::endl;
+          probe_output_to_key_and_payload_[i] = to_key.get(i);
+        }
   }
 }
 
@@ -2169,12 +2181,15 @@ Status JoinResultMaterialize::AppendProbeOnly(const ExecBatch& key_and_payload,
 Status JoinResultMaterialize::AppendBuildOnly(int num_rows_to_append,
                                               const uint32_t* key_ids,
                                               const uint32_t* payload_ids,
-                                              int* num_rows_appended) {
+                                              int* num_rows_appended,
+                                              bool append_nulls) {
   num_rows_to_append =
       std::min(ExecBatchBuilder::num_rows_max() - num_rows_, num_rows_to_append);
+
   if (HasProbeOutput()) {
     RETURN_NOT_OK(batch_builder_.AppendNulls(
         pool_, probe_schemas_->data_types(HashJoinProjection::OUTPUT),
+                    probe_schemas_->map(HashJoinProjection::KEY, HashJoinProjection::OUTPUT).num_cols,
         num_rows_to_append));
   }
   if (NeedsKeyId()) {
@@ -2221,6 +2236,27 @@ Status JoinResultMaterialize::Append(const ExecBatch& key_and_payload,
   return Status::OK();
 }
 
+Status JoinResultMaterialize::FlushBuildColumnIntoProbeColumn(
+    const std::shared_ptr<DataType>& data_type, const RowArray* row_array,
+    int column_id, uint32_t* row_ids, ResizableArrayData *result_column) {
+  //ResizableArrayData output;
+  //output.Init(data_type, pool_, bit_util::Log2(num_rows_));
+
+  int num_already_filled = result_column->num_rows();
+
+  int num_null_ranges = null_ranges_.size();
+  int start_index = num_null_ranges == 0 ? 0 : null_ranges_[num_null_ranges - 1].first + null_ranges_[num_null_ranges - 1].second;
+  assert(start_index == num_already_filled);
+
+  if (start_index != num_rows_) {
+      RETURN_NOT_OK(row_array->DecodeSelected(
+          result_column, column_id, num_rows_ - start_index, row_ids + start_index, pool_));
+  }
+
+  return Status::OK();
+}
+
+
 Result<std::shared_ptr<ArrayData>> JoinResultMaterialize::FlushBuildColumn(
     const std::shared_ptr<DataType>& data_type, const RowArray* row_array, int column_id,
     uint32_t* row_ids) {
@@ -2250,14 +2286,22 @@ Status JoinResultMaterialize::Flush(ExecBatch* out) {
   out->values.clear();
 
   int num_probe_cols = probe_schemas_->num_cols(HashJoinProjection::OUTPUT);
+  size_t num_probe_key_cols = probe_schemas_->map(HashJoinProjection::KEY, HashJoinProjection::OUTPUT).num_cols;
   int num_build_cols = build_schemas_->num_cols(HashJoinProjection::OUTPUT);
   out->values.resize(num_probe_cols + num_build_cols);
 
   if (HasProbeOutput()) {
-    ExecBatch probe_batch = batch_builder_.Flush();
-    ARROW_DCHECK(static_cast<int>(probe_batch.values.size()) == num_probe_cols);
-    for (size_t i = 0; i < probe_batch.values.size(); ++i) {
-      out->values[i] = std::move(probe_batch.values[i]);
+    std::vector<ResizableArrayData> probe_batch = batch_builder_.Flush();
+    ARROW_DCHECK(static_cast<int>(probe_batch.size()) == num_probe_cols);
+    for (size_t i = 0; i < probe_batch.size(); ++i) {
+      auto to_key = build_schemas_->map(HashJoinProjection::OUTPUT, HashJoinProjection::KEY);
+
+      if (i < num_probe_key_cols) {
+        RETURN_NOT_OK(FlushBuildColumnIntoProbeColumn(build_schemas_->data_type(HashJoinProjection::OUTPUT, i),
+                                                  build_keys_, to_key.get(i), key_ids_.data(), &probe_batch[i]));
+      }
+
+      out->values[i] = probe_batch[i].array_data(); //std::move(output.);
     }
   }
   auto to_key = build_schemas_->map(HashJoinProjection::OUTPUT, HashJoinProjection::KEY);
@@ -2265,14 +2309,17 @@ Status JoinResultMaterialize::Flush(ExecBatch* out) {
       build_schemas_->map(HashJoinProjection::OUTPUT, HashJoinProjection::PAYLOAD);
   for (int i = 0; i < num_build_cols; ++i) {
     if (to_key.get(i) != SchemaProjectionMap::kMissingField) {
+      std::cout << "flushing key column" << std::endl;
       std::shared_ptr<ArrayData> column;
       ARROW_ASSIGN_OR_RAISE(
           column,
           FlushBuildColumn(build_schemas_->data_type(HashJoinProjection::OUTPUT, i),
                            build_keys_, to_key.get(i), key_ids_.data()));
       out->values[num_probe_cols + i] = std::move(column);
+
     } else if (to_payload.get(i) != SchemaProjectionMap::kMissingField) {
       std::shared_ptr<ArrayData> column;
+      std::cout << "flushing payload column" << std::endl;
       ARROW_ASSIGN_OR_RAISE(
           column,
           FlushBuildColumn(
@@ -2353,6 +2400,8 @@ bool JoinMatchIterator::GetNextBatch(int num_rows_max, int* out_num_rows,
                                      uint16_t* batch_row_ids, uint32_t* key_ids,
                                      uint32_t* payload_ids) {
   *out_num_rows = 0;
+
+  std::cout << "Swiss Join" << std::endl;
 
   if (no_duplicate_keys_) {
     // When every input key can have at most one match,
@@ -2686,7 +2735,7 @@ class SwissJoin : public HashJoinImpl {
   Status Init(ExecContext* ctx, JoinType join_type, bool use_sync_execution,
               size_t num_threads, const HashJoinProjectionMaps* proj_map_left,
               const HashJoinProjectionMaps* proj_map_right,
-              std::vector<JoinKeyCmp> key_cmp, Expression filter,
+              std::vector<JoinKeyCmp> key_cmp, bool combine_keys, Expression filter,
               OutputBatchCallback output_batch_callback,
               FinishedCallback finished_callback,
               TaskScheduler::ScheduleImpl schedule_task_callback) override {
@@ -3109,7 +3158,7 @@ class SwissJoin : public HashJoinImpl {
         // values according to the generated list of ids.
         //
         Status status = local_states_[thread_id].materialize.AppendBuildOnly(
-            num_output_rows, key_ids_buf.mutable_data(), payload_ids_buf.mutable_data(),
+            num_output_rows, key_ids_buf.mutable_data(), payload_ids_buf.mutable_data(), false,
             [&](ExecBatch batch) {
               output_batch_callback_(static_cast<int64_t>(thread_id), std::move(batch));
             });

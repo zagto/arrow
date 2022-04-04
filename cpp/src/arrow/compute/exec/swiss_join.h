@@ -86,16 +86,16 @@ class ExecBatchBuilder {
                         const int* col_ids = NULLPTR);
 
   Status AppendNulls(MemoryPool* pool,
-                     const std::vector<std::shared_ptr<DataType>>& types,
+                     const std::vector<std::shared_ptr<DataType>>& types, int num_ignored_columns,
                      int num_rows_to_append);
 
   Status AppendNulls(MemoryPool* pool,
-                     const std::vector<std::shared_ptr<DataType>>& types,
+                     const std::vector<std::shared_ptr<DataType>>& types, int num_ignored_columns,
                      int num_rows_to_append, int* num_appended);
 
   // Should only be called if num_rows() returns non-zero.
   //
-  ExecBatch Flush();
+  std::vector<ResizableArrayData> Flush();
 
   int num_rows() const { return values_.empty() ? 0 : values_[0].num_rows(); }
 
@@ -654,7 +654,7 @@ class JoinResultMaterialize {
                          const uint16_t* row_ids, int* num_rows_appended);
 
   Status AppendBuildOnly(int num_rows_to_append, const uint32_t* key_ids,
-                         const uint32_t* payload_ids, int* num_rows_appended);
+                         const uint32_t* payload_ids, int* num_rows_appended, bool append_nulls);
 
   Status Append(const ExecBatch& key_and_payload, int num_rows_to_append,
                 const uint16_t* row_ids, const uint32_t* key_ids,
@@ -700,13 +700,13 @@ class JoinResultMaterialize {
 
   template <class OUTPUT_BATCH_FN>
   Status AppendBuildOnly(int num_rows_to_append, const uint32_t* key_ids,
-                         const uint32_t* payload_ids, OUTPUT_BATCH_FN output_batch_fn) {
+                         const uint32_t* payload_ids, bool append_nulls, OUTPUT_BATCH_FN output_batch_fn) {
     return AppendAndOutput(
         num_rows_to_append,
         [&](int num_rows_to_append_left, int offset, int* num_rows_appended) {
           return AppendBuildOnly(
               num_rows_to_append_left, key_ids ? key_ids + offset : NULLPTR,
-              payload_ids ? payload_ids + offset : NULLPTR, num_rows_appended);
+              payload_ids ? payload_ids + offset : NULLPTR, num_rows_appended, append_nulls);
         },
         output_batch_fn);
   }
@@ -744,6 +744,9 @@ class JoinResultMaterialize {
   bool HasBuildPayloadOutput() const;
   bool NeedsKeyId() const;
   bool NeedsPayloadId() const;
+  Status FlushBuildColumnIntoProbeColumn(const std::shared_ptr<DataType>& data_type, const RowArray* row_array,
+      int column_id, uint32_t* row_ids, ResizableArrayData *result_column);
+
   Result<std::shared_ptr<ArrayData>> FlushBuildColumn(
       const std::shared_ptr<DataType>& data_type, const RowArray* row_array,
       int column_id, uint32_t* row_ids);

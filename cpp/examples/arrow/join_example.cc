@@ -58,13 +58,24 @@ char kLeftRelationCsvData[] = R"csv(lkey,shared,ldistinct
 1,4,7
 2,5,8
 11,20,21
-3,6,9)csv";
+3,6,9
+10,6,9
+11,6,9
+13,6,9
+14,6,9
+4,56,1)csv";
 
 char kRightRelationCsvData[] = R"csv(rkey,shared,rdistinct
 1,10,13
 124,10,11
 2,11,14
-3,12,15)csv";
+2000,22,22
+3,12,15
+null,6,9
+21,6,9
+33,6,9
+24,6,9
+5,4,6)csv";
 
 arrow::Result<std::shared_ptr<arrow::dataset::Dataset>> CreateDataSetFromCSVData(
     bool is_left) {
@@ -126,12 +137,15 @@ arrow::Status DoHashJoin() {
   ARROW_ASSIGN_OR_RAISE(right_source,
                         cp::MakeExecNode("scan", plan.get(), {}, r_scan_node_options));
 
-  arrow::compute::HashJoinNodeOptions join_opts{arrow::compute::JoinType::INNER,
-                                                /*in_left_keys=*/{"lkey"},
-                                                /*in_right_keys=*/{"rkey"},
+  arrow::compute::HashJoinNodeOptions join_opts{arrow::compute::JoinType::FULL_OUTER,
+                                                /*in_left_keys=*/{"lkey","shared"},
+                                                /*in_right_keys=*/{"rkey","shared"},
+                                                {"lkey", "shared","ldistinct"},
+                                                {"rkey", "shared"},
                                                 /*filter*/ arrow::compute::literal(true),
                                                 /*output_suffix_for_left*/ "_l",
-                                                /*output_suffix_for_right*/ "_r"};
+                                                /*output_suffix_for_right*/ "_r",
+                                               true};
 
   ARROW_ASSIGN_OR_RAISE(
       auto hashjoin,
