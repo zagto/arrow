@@ -492,6 +492,7 @@ class HashJoinNode : public ExecNode {
                  /*num_outputs=*/1),
         join_type_(join_options.join_type),
         key_cmp_(join_options.key_cmp),
+        combine_keys_(join_options.combine_keys),
         filter_(std::move(filter)),
         schema_mgr_(std::move(schema_mgr)),
         impl_(std::move(impl)) {
@@ -630,7 +631,7 @@ class HashJoinNode : public ExecNode {
 
     RETURN_NOT_OK(impl_->Init(
         plan_->exec_context(), join_type_, use_sync_execution, num_threads,
-        &(schema_mgr_->proj_maps[0]), &(schema_mgr_->proj_maps[1]), key_cmp_, filter_,
+        &(schema_mgr_->proj_maps[0]), &(schema_mgr_->proj_maps[1]), key_cmp_, combine_keys_, filter_,
         [this](int64_t /*ignored*/, ExecBatch batch) {
           this->OutputBatchCallback(batch);
         },
@@ -700,6 +701,7 @@ class HashJoinNode : public ExecNode {
   std::atomic<bool> complete_;
   JoinType join_type_;
   std::vector<JoinKeyCmp> key_cmp_;
+  bool combine_keys_;
   Expression filter_;
   ThreadIndexer thread_indexer_;
   std::unique_ptr<HashJoinSchema> schema_mgr_;

@@ -24,6 +24,7 @@
 #include <numeric>
 #include <unordered_map>
 #include <vector>
+#include <iostream>
 
 #include "arrow/compute/exec/hash_join_dict.h"
 #include "arrow/compute/exec/task_util.h"
@@ -85,7 +86,7 @@ class HashJoinBasicImpl : public HashJoinImpl {
   Status Init(ExecContext* ctx, JoinType join_type, bool use_sync_execution,
               size_t num_threads, const HashJoinProjectionMaps* proj_map_left,
               const HashJoinProjectionMaps* proj_map_right,
-              std::vector<JoinKeyCmp> key_cmp, Expression filter,
+              std::vector<JoinKeyCmp> key_cmp, bool combine_keys, Expression filter,
               OutputBatchCallback output_batch_callback,
               FinishedCallback finished_callback,
               TaskScheduler::ScheduleImpl schedule_task_callback) override {
@@ -407,7 +408,8 @@ class HashJoinBasicImpl : public HashJoinImpl {
   }
 
   Status ProbeBatch_OutputOne(size_t thread_index, int64_t batch_size_next,
-                              const int32_t* opt_left_ids, const int32_t* opt_right_ids) {
+                              const int32_t* opt_left_ids, const int32_t* opt_right_ids,
+                              bool left_key_use_right, bool right_key_use_left) {
     if (batch_size_next == 0 || (!opt_left_ids && !opt_right_ids)) {
       return Status::OK();
     }
@@ -451,9 +453,9 @@ class HashJoinBasicImpl : public HashJoinImpl {
                             hash_table_payloads_.Decode(batch_size_next, opt_right_ids));
     }
 
-    ProbeBatch_OutputOne(batch_size_next, has_left ? &left_key : nullptr,
+    ProbeBatch_OutputOne(batch_size_next, has_left ? (left_key_use_right ? &right_key : &left_key) : nullptr,
                          has_left_payload ? &left_payload : nullptr,
-                         has_right ? &right_key : nullptr,
+                         has_right ? (right_key_use_left ? &left_key : &right_key) : nullptr,
                          has_right_payload ? &right_payload : nullptr);
 
     return Status::OK();
@@ -465,6 +467,7 @@ class HashJoinBasicImpl : public HashJoinImpl {
                               const std::vector<int32_t>& no_match,
                               std::vector<int32_t>& match_left,
                               std::vector<int32_t>& match_right) {
+    std::cout << "OutputAll" << std::endl;
     if (join_type_ == JoinType::RIGHT_SEMI || join_type_ == JoinType::RIGHT_ANTI) {
       // Nothing to output
       return Status::OK();
@@ -478,7 +481,7 @@ class HashJoinBasicImpl : public HashJoinImpl {
         int64_t batch_size_next = std::min(static_cast<int64_t>(out_ids.size() - start),
                                            static_cast<int64_t>(output_batch_size_));
         RETURN_NOT_OK(ProbeBatch_OutputOne(thread_index, batch_size_next,
-                                           out_ids.data() + start, nullptr));
+                                           out_ids.data() + start, nullptr, false, false));
       }
     } else {
       if (join_type_ == JoinType::LEFT_OUTER || join_type_ == JoinType::FULL_OUTER) {
@@ -494,11 +497,14 @@ class HashJoinBasicImpl : public HashJoinImpl {
         int64_t batch_size_next =
             std::min(static_cast<int64_t>(match_left.size() - start),
                      static_cast<int64_t>(output_batch_size_));
+        std::cout << "start: " << start << " size " << batch_size_next << std::endl;
         RETURN_NOT_OK(ProbeBatch_OutputOne(thread_index, batch_size_next,
                                            match_left.data() + start,
-                                           match_right.data() + start));
+                                           match_right.data() + start, false, true));
       }
     }
+    std::cout << "OutputAll End" << std::endl;
+
     return Status::OK();
   }
 
@@ -537,6 +543,9 @@ class HashJoinBasicImpl : public HashJoinImpl {
   Status ProbeBatch(size_t thread_index, const ExecBatch& batch) {
     ThreadLocalState& local_state = local_states_[thread_index];
     InitLocalStateIfNeeded(thread_index);
+
+    std::cout << "ProbeBatch" << std::endl;
+
 
     local_state.exec_batch_keys.Clear();
 
@@ -591,6 +600,8 @@ class HashJoinBasicImpl : public HashJoinImpl {
                                        local_state.exec_batch_payloads, local_state.match,
                                        local_state.no_match, local_state.match_left,
                                        local_state.match_right));
+
+    std::cout << "ProbeBatch end" << std::endl;
 
     return Status::OK();
   }
@@ -770,7 +781,7 @@ class HashJoinBasicImpl : public HashJoinImpl {
 
     RETURN_NOT_OK(
         ProbeBatch_OutputOne(thread_index, static_cast<int64_t>(id_right.size()),
-                             use_left ? id_left.data() : nullptr, id_right.data()));
+                             use_left ? id_left.data() : nullptr, id_right.data(), true, false));
     return Status::OK();
   }
 
