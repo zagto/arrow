@@ -137,7 +137,7 @@ class JoinBenchmark {
 
     DCHECK_OK(join_->Init(
         ctx_.get(), settings.join_type, !is_parallel, settings.num_threads,
-        &(schema_mgr_->proj_maps[0]), &(schema_mgr_->proj_maps[1]), {JoinKeyCmp::EQ}, false,
+        &(schema_mgr_->proj_maps[0]), &(schema_mgr_->proj_maps[1]), {JoinKeyCmp::EQ},
         std::move(filter), [](int64_t, ExecBatch) {}, [](int64_t x) {},
         schedule_callback));
   }

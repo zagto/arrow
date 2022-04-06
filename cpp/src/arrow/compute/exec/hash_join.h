@@ -42,18 +42,19 @@ class ARROW_EXPORT HashJoinSchema {
 
   Status Init(JoinType join_type, const Schema& left_schema,
               const std::vector<FieldRef>& left_keys,
-              const std::vector<FieldRef>& left_output, const Schema& right_schema,
+              const std::vector<FieldRef>& left_output, const std::vector<FieldRef> &left_combine_output, const Schema& right_schema,
               const std::vector<FieldRef>& right_keys,
-              const std::vector<FieldRef>& right_output, const Expression& filter,
+              const std::vector<FieldRef>& right_output, const std::vector<FieldRef> &right_combine_output,
+              const Expression& filter,
               const std::string& left_field_name_prefix,
               const std::string& right_field_name_prefix);
 
   static Status ValidateSchemas(JoinType join_type, const Schema& left_schema,
                                 const std::vector<FieldRef>& left_keys,
-                                const std::vector<FieldRef>& left_output,
+                                const std::vector<FieldRef>& left_output, const std::vector<FieldRef> &left_combine_output,
                                 const Schema& right_schema,
                                 const std::vector<FieldRef>& right_keys,
-                                const std::vector<FieldRef>& right_output,
+                                const std::vector<FieldRef>& right_output, const std::vector<FieldRef> &right_combine_output,
                                 const std::string& left_field_name_prefix,
                                 const std::string& right_field_name_prefix);
 
@@ -74,7 +75,10 @@ class ARROW_EXPORT HashJoinSchema {
     return SchemaProjectionMaps<HashJoinProjection>::kMissingField;
   }
 
-  SchemaProjectionMaps<HashJoinProjection> proj_maps[2];
+  static constexpr int NUM_SIDES = 2;
+  static constexpr int LEFT_SIDE = 0;
+  static constexpr int RIGHT_SIDE = 1;
+  SchemaProjectionMaps<HashJoinProjection> proj_maps[NUM_SIDES];
 
  private:
   static bool IsTypeSupported(const DataType& type);
@@ -109,7 +113,7 @@ class HashJoinImpl {
   virtual Status Init(ExecContext* ctx, JoinType join_type, bool use_sync_execution,
                       size_t num_threads, const HashJoinProjectionMaps* proj_map_left,
                       const HashJoinProjectionMaps* proj_map_right,
-                      std::vector<JoinKeyCmp> key_cmp, bool combine_keys, Expression filter,
+                      std::vector<JoinKeyCmp> key_cmp, Expression filter,
                       OutputBatchCallback output_batch_callback,
                       FinishedCallback finished_callback,
                       TaskScheduler::ScheduleImpl schedule_task_callback) = 0;

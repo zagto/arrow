@@ -35,7 +35,8 @@ enum class HashJoinProjection : int {
   KEY = 1,
   PAYLOAD = 2,
   FILTER = 3,
-  OUTPUT = 4
+  OUTPUT = 4,
+  OUTPUT_COMBINE = 5
 };
 
 struct SchemaProjectionMap {

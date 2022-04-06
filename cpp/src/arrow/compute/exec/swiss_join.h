@@ -89,9 +89,9 @@ class ExecBatchBuilder {
                      const std::vector<std::shared_ptr<DataType>>& types, int num_ignored_columns,
                      int num_rows_to_append);
 
-  Status AppendNulls(MemoryPool* pool,
+  /*Status AppendNulls(MemoryPool* pool,
                      const std::vector<std::shared_ptr<DataType>>& types, int num_ignored_columns,
-                     int num_rows_to_append, int* num_appended);
+                     int num_rows_to_append, int* num_appended);*/
 
   // Should only be called if num_rows() returns non-zero.
   //
@@ -654,7 +654,7 @@ class JoinResultMaterialize {
                          const uint16_t* row_ids, int* num_rows_appended);
 
   Status AppendBuildOnly(int num_rows_to_append, const uint32_t* key_ids,
-                         const uint32_t* payload_ids, int* num_rows_appended, bool append_nulls);
+                         const uint32_t* payload_ids, int* num_rows_appended);
 
   Status Append(const ExecBatch& key_and_payload, int num_rows_to_append,
                 const uint16_t* row_ids, const uint32_t* key_ids,
@@ -700,13 +700,13 @@ class JoinResultMaterialize {
 
   template <class OUTPUT_BATCH_FN>
   Status AppendBuildOnly(int num_rows_to_append, const uint32_t* key_ids,
-                         const uint32_t* payload_ids, bool append_nulls, OUTPUT_BATCH_FN output_batch_fn) {
+                         const uint32_t* payload_ids, OUTPUT_BATCH_FN output_batch_fn) {
     return AppendAndOutput(
         num_rows_to_append,
         [&](int num_rows_to_append_left, int offset, int* num_rows_appended) {
           return AppendBuildOnly(
               num_rows_to_append_left, key_ids ? key_ids + offset : NULLPTR,
-              payload_ids ? payload_ids + offset : NULLPTR, num_rows_appended, append_nulls);
+              payload_ids ? payload_ids + offset : NULLPTR, num_rows_appended);
         },
         output_batch_fn);
   }

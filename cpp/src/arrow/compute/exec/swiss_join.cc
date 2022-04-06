@@ -552,14 +552,16 @@ Status ExecBatchBuilder::AppendNulls(MemoryPool* pool,
   // If this is the first time we append rows, then initialize output buffers.
   //
   if (values_.empty()) {
+    ARROW_CHECK(num_ignored_columns == 0);
     values_.resize(types.size());
     for (size_t i = 0; i < types.size(); ++i) {
       values_[i].Init(types[i], pool, kLogNumRows);
     }
   }
 
-  for (size_t i = num_ignored_columns; i < values_.size(); ++i) {
-    RETURN_NOT_OK(AppendNulls(types[i], values_[i], num_rows_to_append, pool));
+  for (size_t i = 0; i < values_.size() - num_ignored_columns; ++i) {
+    RETURN_NOT_OK(AppendNulls(types[i], values_[num_ignored_columns + i],
+                  num_rows_to_append, pool));
   }
 
   return Status::OK();
@@ -2089,25 +2091,24 @@ void JoinResultMaterialize::Init(MemoryPool* pool,
   // Initialize mapping of columns from output batch column index to key and
   // payload batch column index.
   //
-  probe_output_to_key_and_payload_.resize(
-      probe_schemas_->num_cols(HashJoinProjection::OUTPUT));
-  int num_key_cols = probe_schemas_->num_cols(HashJoinProjection::KEY);
-  auto to_key = probe_schemas_->map(HashJoinProjection::OUTPUT, HashJoinProjection::KEY);
-  auto to_payload =
-      probe_schemas_->map(HashJoinProjection::OUTPUT, HashJoinProjection::PAYLOAD);
-  for (int i = 0; static_cast<size_t>(i) < probe_output_to_key_and_payload_.size(); ++i) {
-    //probe_output_to_key_and_payload_[i] =
-        /*to_key.get(i) == SchemaProjectionMap::kMissingField
-            ? to_payload.get(i) + num_key_cols
-            : to_key.get(i);*/
+  int num_probe_cols = probe_schemas_->num_cols(HashJoinProjection::OUTPUT)
+      + probe_schemas->num_cols(HashJoinProjection::OUTPUT_COMBINE);
+  probe_output_to_key_and_payload_.reserve(num_probe_cols);
 
-        if (to_key.get(i) == SchemaProjectionMap::kMissingField) {
-          std::cout << "Probe Payload " << i << std::endl;
-          probe_output_to_key_and_payload_[i] = to_payload.get(i) + num_key_cols;
-        } else {
-          std::cout << "Probe Key " << i << std::endl;
-          probe_output_to_key_and_payload_[i] = to_key.get(i);
-        }
+  for (auto target: {HashJoinProjection::OUTPUT, HashJoinProjection::OUTPUT_COMBINE}) {
+    int num_key_cols = probe_schemas_->num_cols(HashJoinProjection::KEY);
+    auto to_key = probe_schemas_->map(target, HashJoinProjection::KEY);
+    auto to_payload = probe_schemas_->map(target, HashJoinProjection::PAYLOAD);
+
+    for (int i = 0; i < probe_schemas->num_cols(target); ++i) {
+      if (to_key.get(i) == SchemaProjectionMap::kMissingField) {
+        std::cout << "Probe Payload " << i << std::endl;
+        probe_output_to_key_and_payload_.push_back(to_payload.get(i) + num_key_cols);
+      } else {
+        std::cout << "Probe Key " << i << std::endl;
+        probe_output_to_key_and_payload_.push_back(to_key.get(i));
+      }
+    }
   }
 }
 
@@ -2120,20 +2121,24 @@ void JoinResultMaterialize::SetBuildSide(const RowArray* build_keys,
 }
 
 bool JoinResultMaterialize::HasProbeOutput() const {
-  return probe_schemas_->num_cols(HashJoinProjection::OUTPUT) > 0;
+  return probe_schemas_->num_cols(HashJoinProjection::OUTPUT)
+      + probe_schemas_->num_cols(HashJoinProjection::OUTPUT_COMBINE) > 0;
 }
 
 bool JoinResultMaterialize::HasBuildKeyOutput() const {
-  auto to_key = build_schemas_->map(HashJoinProjection::OUTPUT, HashJoinProjection::KEY);
-  for (int i = 0; i < build_schemas_->num_cols(HashJoinProjection::OUTPUT); ++i) {
-    if (to_key.get(i) != SchemaProjectionMap::kMissingField) {
-      return true;
+  for (auto target: {HashJoinProjection::OUTPUT, HashJoinProjection::OUTPUT_COMBINE}) {
+    auto to_key = build_schemas_->map(target, HashJoinProjection::KEY);
+    for (int i = 0; i < build_schemas_->num_cols(target); ++i) {
+      if (to_key.get(i) != SchemaProjectionMap::kMissingField) {
+        return true;
+      }
     }
   }
   return false;
 }
 
 bool JoinResultMaterialize::HasBuildPayloadOutput() const {
+  // payloads can be only OUTPUT, not OUTPUT_COMBINE
   auto to_payload =
       build_schemas_->map(HashJoinProjection::OUTPUT, HashJoinProjection::PAYLOAD);
   for (int i = 0; i < build_schemas_->num_cols(HashJoinProjection::OUTPUT); ++i) {
@@ -2181,15 +2186,14 @@ Status JoinResultMaterialize::AppendProbeOnly(const ExecBatch& key_and_payload,
 Status JoinResultMaterialize::AppendBuildOnly(int num_rows_to_append,
                                               const uint32_t* key_ids,
                                               const uint32_t* payload_ids,
-                                              int* num_rows_appended,
-                                              bool append_nulls) {
+                                              int* num_rows_appended) {
   num_rows_to_append =
       std::min(ExecBatchBuilder::num_rows_max() - num_rows_, num_rows_to_append);
 
   if (HasProbeOutput()) {
     RETURN_NOT_OK(batch_builder_.AppendNulls(
         pool_, probe_schemas_->data_types(HashJoinProjection::OUTPUT),
-                    probe_schemas_->map(HashJoinProjection::KEY, HashJoinProjection::OUTPUT).num_cols,
+                    probe_schemas_->num_cols(HashJoinProjection::OUTPUT_COMBINE),
         num_rows_to_append));
   }
   if (NeedsKeyId()) {
@@ -2285,23 +2289,24 @@ Status JoinResultMaterialize::Flush(ExecBatch* out) {
   out->length = num_rows_;
   out->values.clear();
 
+  int num_combine_cols = probe_schemas_->num_cols(HashJoinProjection::OUTPUT_COMBINE);
+  ARROW_DCHECK_EQ(num_combine_cols,
+                  build_schemas_->num_cols(HashJoinProjection::OUTPUT_COMBINE));
+
   int num_probe_cols = probe_schemas_->num_cols(HashJoinProjection::OUTPUT);
-  size_t num_probe_key_cols = probe_schemas_->map(HashJoinProjection::KEY, HashJoinProjection::OUTPUT).num_cols;
   int num_build_cols = build_schemas_->num_cols(HashJoinProjection::OUTPUT);
-  out->values.resize(num_probe_cols + num_build_cols);
+  out->values.resize(num_combine_cols + num_probe_cols + num_build_cols);
 
   if (HasProbeOutput()) {
     std::vector<ResizableArrayData> probe_batch = batch_builder_.Flush();
-    ARROW_DCHECK(static_cast<int>(probe_batch.size()) == num_probe_cols);
+    ARROW_DCHECK(static_cast<int>(probe_batch.size()) == num_probe_cols + num_combine_cols);
     for (size_t i = 0; i < probe_batch.size(); ++i) {
-      auto to_key = build_schemas_->map(HashJoinProjection::OUTPUT, HashJoinProjection::KEY);
-
-      if (i < num_probe_key_cols) {
-        RETURN_NOT_OK(FlushBuildColumnIntoProbeColumn(build_schemas_->data_type(HashJoinProjection::OUTPUT, i),
+      if (i < size_t(num_combine_cols)) {
+        auto to_key = build_schemas_->map(HashJoinProjection::OUTPUT_COMBINE, HashJoinProjection::KEY);
+        RETURN_NOT_OK(FlushBuildColumnIntoProbeColumn(build_schemas_->data_type(HashJoinProjection::OUTPUT_COMBINE, i),
                                                   build_keys_, to_key.get(i), key_ids_.data(), &probe_batch[i]));
       }
-
-      out->values[i] = probe_batch[i].array_data(); //std::move(output.);
+      out->values[i] = probe_batch[i].array_data();
     }
   }
   auto to_key = build_schemas_->map(HashJoinProjection::OUTPUT, HashJoinProjection::KEY);
@@ -2315,7 +2320,7 @@ Status JoinResultMaterialize::Flush(ExecBatch* out) {
           column,
           FlushBuildColumn(build_schemas_->data_type(HashJoinProjection::OUTPUT, i),
                            build_keys_, to_key.get(i), key_ids_.data()));
-      out->values[num_probe_cols + i] = std::move(column);
+      out->values[num_combine_cols + num_probe_cols + i] = std::move(column);
 
     } else if (to_payload.get(i) != SchemaProjectionMap::kMissingField) {
       std::shared_ptr<ArrayData> column;
@@ -2326,7 +2331,7 @@ Status JoinResultMaterialize::Flush(ExecBatch* out) {
               build_schemas_->data_type(HashJoinProjection::OUTPUT, i), build_payloads_,
               to_payload.get(i),
               payload_id_same_as_key_id_ ? key_ids_.data() : payload_ids_.data()));
-      out->values[num_probe_cols + i] = std::move(column);
+      out->values[num_combine_cols + num_probe_cols + i] = std::move(column);
     } else {
       ARROW_DCHECK(false);
     }
@@ -2735,7 +2740,7 @@ class SwissJoin : public HashJoinImpl {
   Status Init(ExecContext* ctx, JoinType join_type, bool use_sync_execution,
               size_t num_threads, const HashJoinProjectionMaps* proj_map_left,
               const HashJoinProjectionMaps* proj_map_right,
-              std::vector<JoinKeyCmp> key_cmp, bool combine_keys, Expression filter,
+              std::vector<JoinKeyCmp> key_cmp, Expression filter,
               OutputBatchCallback output_batch_callback,
               FinishedCallback finished_callback,
               TaskScheduler::ScheduleImpl schedule_task_callback) override {
@@ -3158,7 +3163,7 @@ class SwissJoin : public HashJoinImpl {
         // values according to the generated list of ids.
         //
         Status status = local_states_[thread_id].materialize.AppendBuildOnly(
-            num_output_rows, key_ids_buf.mutable_data(), payload_ids_buf.mutable_data(), false,
+            num_output_rows, key_ids_buf.mutable_data(), payload_ids_buf.mutable_data(),
             [&](ExecBatch batch) {
               output_batch_callback_(static_cast<int64_t>(thread_id), std::move(batch));
             });

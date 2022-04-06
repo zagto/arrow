@@ -56,7 +56,7 @@ namespace cp = arrow::compute;
 
 char kLeftRelationCsvData[] = R"csv(lkey,shared,ldistinct
 1,4,7
-2,5,8
+2,11,8
 11,20,21
 3,6,9
 10,6,9
@@ -139,12 +139,14 @@ arrow::Status DoHashJoin() {
   arrow::compute::HashJoinNodeOptions join_opts{arrow::compute::JoinType::FULL_OUTER,
                                                 /*in_left_keys=*/{"lkey","shared"},
                                                 /*in_right_keys=*/{"rkey","shared"},
-                                                {"lkey", "shared","ldistinct"},
+                                                {"lkey", "shared", "ldistinct"},
+                                                {"lkey", "shared"},
                                                 {"rkey", "shared"},
+                                                {"rkey", "shared"},
+                                                {arrow::compute::JoinKeyCmp::EQ, arrow::compute::JoinKeyCmp::EQ},
                                                 /*filter*/ arrow::compute::literal(true),
                                                 /*output_suffix_for_left*/ "_l",
-                                                /*output_suffix_for_right*/ "_r",
-                                               true};
+                                                /*output_suffix_for_right*/ "_r"};
 
   ARROW_ASSIGN_OR_RAISE(
       auto hashjoin,

@@ -86,7 +86,7 @@ class HashJoinBasicImpl : public HashJoinImpl {
   Status Init(ExecContext* ctx, JoinType join_type, bool use_sync_execution,
               size_t num_threads, const HashJoinProjectionMaps* proj_map_left,
               const HashJoinProjectionMaps* proj_map_right,
-              std::vector<JoinKeyCmp> key_cmp, bool combine_keys, Expression filter,
+              std::vector<JoinKeyCmp> key_cmp, Expression filter,
               OutputBatchCallback output_batch_callback,
               FinishedCallback finished_callback,
               TaskScheduler::ScheduleImpl schedule_task_callback) override {

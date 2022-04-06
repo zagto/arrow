@@ -28,6 +28,8 @@
 #include "arrow/util/make_unique.h"
 #include "arrow/util/thread_pool.h"
 
+#include <iostream>
+
 namespace arrow {
 
 using internal::checked_cast;
@@ -105,18 +107,17 @@ Status HashJoinSchema::Init(JoinType join_type, const Schema& left_schema,
       right_output[i] = FieldRef(static_cast<int>(i));
     }
   }
-  return Init(join_type, left_schema, left_keys, left_output, right_schema, right_keys,
-              right_output, filter, left_field_name_suffix, right_field_name_suffix);
+  return Init(join_type, left_schema, left_keys, left_output, {}, right_schema, right_keys,
+              right_output, {}, filter, left_field_name_suffix, right_field_name_suffix);
 }
 
-Status HashJoinSchema::Init(
-    JoinType join_type, const Schema& left_schema, const std::vector<FieldRef>& left_keys,
-    const std::vector<FieldRef>& left_output, const Schema& right_schema,
-    const std::vector<FieldRef>& right_keys, const std::vector<FieldRef>& right_output,
+Status HashJoinSchema::Init(JoinType join_type, const Schema& left_schema, const std::vector<FieldRef>& left_keys,
+    const std::vector<FieldRef>& left_output, const std::vector<FieldRef> &left_combine_output, const Schema& right_schema,
+    const std::vector<FieldRef>& right_keys, const std::vector<FieldRef>& right_output, const std::vector<FieldRef> &right_combine_output,
     const Expression& filter, const std::string& left_field_name_suffix,
     const std::string& right_field_name_suffix) {
-  RETURN_NOT_OK(ValidateSchemas(join_type, left_schema, left_keys, left_output,
-                                right_schema, right_keys, right_output,
+  RETURN_NOT_OK(ValidateSchemas(join_type, left_schema, left_keys, left_output, left_combine_output,
+                                right_schema, right_keys, right_output, right_combine_output,
                                 left_field_name_suffix, right_field_name_suffix));
 
   std::vector<HashJoinProjection> handles;
@@ -140,8 +141,11 @@ Status HashJoinSchema::Init(
   handles.push_back(HashJoinProjection::OUTPUT);
   field_refs.push_back(&left_output);
 
+  handles.push_back(HashJoinProjection::OUTPUT_COMBINE);
+  field_refs.push_back(&left_combine_output);
+
   RETURN_NOT_OK(
-      proj_maps[0].Init(HashJoinProjection::INPUT, left_schema, handles, field_refs));
+      proj_maps[LEFT_SIDE].Init(HashJoinProjection::INPUT, left_schema, handles, field_refs));
 
   handles.clear();
   field_refs.clear();
@@ -160,8 +164,11 @@ Status HashJoinSchema::Init(
   handles.push_back(HashJoinProjection::OUTPUT);
   field_refs.push_back(&right_output);
 
+  handles.push_back(HashJoinProjection::OUTPUT_COMBINE);
+  field_refs.push_back(&right_combine_output);
+
   RETURN_NOT_OK(
-      proj_maps[1].Init(HashJoinProjection::INPUT, right_schema, handles, field_refs));
+      proj_maps[RIGHT_SIDE].Init(HashJoinProjection::INPUT, right_schema, handles, field_refs));
 
   return Status::OK();
 }
@@ -169,9 +176,11 @@ Status HashJoinSchema::Init(
 Status HashJoinSchema::ValidateSchemas(JoinType join_type, const Schema& left_schema,
                                        const std::vector<FieldRef>& left_keys,
                                        const std::vector<FieldRef>& left_output,
+                                       const std::vector<FieldRef>& left_combine_output,
                                        const Schema& right_schema,
                                        const std::vector<FieldRef>& right_keys,
                                        const std::vector<FieldRef>& right_output,
+                                       const std::vector<FieldRef>& right_combine_output,
                                        const std::string& left_field_name_suffix,
                                        const std::string& right_field_name_suffix) {
   // Checks for key fields:
@@ -280,7 +289,33 @@ std::shared_ptr<Schema> HashJoinSchema::MakeOutputSchema(
   std::vector<std::shared_ptr<Field>> fields;
   int left_size = proj_maps[0].num_cols(HashJoinProjection::OUTPUT);
   int right_size = proj_maps[1].num_cols(HashJoinProjection::OUTPUT);
-  fields.resize(left_size + right_size);
+  int combine_size = proj_maps[1].num_cols(HashJoinProjection::OUTPUT_COMBINE);
+  std::cout << "combine_size = " << proj_maps[0].num_cols(HashJoinProjection::OUTPUT_COMBINE) << std::endl;
+  std::cout << "combine_size = " << proj_maps[1].num_cols(HashJoinProjection::OUTPUT_COMBINE) << std::endl;
+
+  ARROW_CHECK_EQ(combine_size, proj_maps[0].num_cols(HashJoinProjection::OUTPUT_COMBINE));
+  fields.resize(combine_size + left_size + right_size);
+
+  for (int i = 0; i < combine_size; ++i) {
+    int input_field_id[NUM_SIDES];
+    const std::string* input_field_name[NUM_SIDES];
+    std::shared_ptr<DataType> input_data_type[NUM_SIDES];
+    for (int side = 0; side < NUM_SIDES; side++) {
+      input_field_id[side] =
+          proj_maps[side].map(HashJoinProjection::OUTPUT_COMBINE, HashJoinProjection::INPUT).get(i);
+      input_field_name[side] =
+          &proj_maps[side].field_name(HashJoinProjection::INPUT, input_field_id[side]);
+      input_data_type[side] =
+          proj_maps[side].data_type(HashJoinProjection::INPUT, input_field_id[side]);
+    }
+
+    ARROW_CHECK_EQ(input_data_type[LEFT_SIDE], input_data_type[RIGHT_SIDE]);
+
+    // insert left table field
+    std::string name = *input_field_name[LEFT_SIDE] + '_' + *input_field_name[RIGHT_SIDE];
+    fields[i] =
+        std::make_shared<Field>(std::move(name), input_data_type[LEFT_SIDE], true /*nullable*/);
+  }
 
   std::unordered_multimap<std::string, int> left_field_map;
   left_field_map.reserve(left_size);
@@ -294,7 +329,7 @@ std::shared_ptr<Schema> HashJoinSchema::MakeOutputSchema(
         proj_maps[side].data_type(HashJoinProjection::INPUT, input_field_id);
     left_field_map.insert({input_field_name, i});
     // insert left table field
-    fields[i] =
+    fields[combine_size + i] =
         std::make_shared<Field>(input_field_name, input_data_type, true /*nullable*/);
   }
 
@@ -320,13 +355,13 @@ std::shared_ptr<Schema> HashJoinSchema::MakeOutputSchema(
           std::make_shared<Field>(input_field_name + left_field_name_suffix,
                                   left_field->type(), true /*nullable*/);
       // insert right table field with suffix
-      fields[left_size + i] = std::make_shared<Field>(
+      fields[combine_size + left_size + i] = std::make_shared<Field>(
           input_field_name + right_field_name_suffix, input_data_type, true /*nullable*/);
     }
 
     if (!match_found) {
       // insert right table field without suffix
-      fields[left_size + i] =
+      fields[combine_size + left_size + i] =
           std::make_shared<Field>(input_field_name, input_data_type, true /*nullable*/);
     }
   }
@@ -492,7 +527,6 @@ class HashJoinNode : public ExecNode {
                  /*num_outputs=*/1),
         join_type_(join_options.join_type),
         key_cmp_(join_options.key_cmp),
-        combine_keys_(join_options.combine_keys),
         filter_(std::move(filter)),
         schema_mgr_(std::move(schema_mgr)),
         impl_(std::move(impl)) {
@@ -521,8 +555,8 @@ class HashJoinNode : public ExecNode {
     } else {
       RETURN_NOT_OK(schema_mgr->Init(
           join_options.join_type, left_schema, join_options.left_keys,
-          join_options.left_output, right_schema, join_options.right_keys,
-          join_options.right_output, join_options.filter,
+          join_options.left_output, join_options.left_combine_output, right_schema, join_options.right_keys,
+          join_options.right_output, join_options.right_combine_output, join_options.filter,
           join_options.output_suffix_for_left, join_options.output_suffix_for_right));
     }
 
@@ -631,7 +665,7 @@ class HashJoinNode : public ExecNode {
 
     RETURN_NOT_OK(impl_->Init(
         plan_->exec_context(), join_type_, use_sync_execution, num_threads,
-        &(schema_mgr_->proj_maps[0]), &(schema_mgr_->proj_maps[1]), key_cmp_, combine_keys_, filter_,
+        &(schema_mgr_->proj_maps[0]), &(schema_mgr_->proj_maps[1]), key_cmp_, filter_,
         [this](int64_t /*ignored*/, ExecBatch batch) {
           this->OutputBatchCallback(batch);
         },
@@ -701,7 +735,6 @@ class HashJoinNode : public ExecNode {
   std::atomic<bool> complete_;
   JoinType join_type_;
   std::vector<JoinKeyCmp> key_cmp_;
-  bool combine_keys_;
   Expression filter_;
   ThreadIndexer thread_indexer_;
   std::unique_ptr<HashJoinSchema> schema_mgr_;
