@@ -351,7 +351,7 @@ std::shared_ptr<Schema> HashJoinSchema::MakeOutputSchema(
       auto left_index = search->second;
       auto left_field = fields[left_index];
       // update left table field with suffix
-      fields[left_index] =
+      fields[combine_size + left_index] =
           std::make_shared<Field>(input_field_name + left_field_name_suffix,
                                   left_field->type(), true /*nullable*/);
       // insert right table field with suffix
