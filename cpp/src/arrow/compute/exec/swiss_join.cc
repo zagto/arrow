@@ -543,8 +543,7 @@ Status ExecBatchBuilder::AppendSelected(MemoryPool* pool, const ExecBatch& batch
 
 Status ExecBatchBuilder::AppendNulls(MemoryPool* pool,
                                      const std::vector<std::shared_ptr<DataType>>& types,
-                                     int num_ignored_columns,
-                                     int num_rows_to_append) {
+                                     int num_ignored_columns, int num_rows_to_append) {
   if (num_rows_to_append == 0) {
     return Status::OK();
   }
@@ -561,7 +560,7 @@ Status ExecBatchBuilder::AppendNulls(MemoryPool* pool,
 
   for (size_t i = 0; i < values_.size() - num_ignored_columns; ++i) {
     RETURN_NOT_OK(AppendNulls(types[i], values_[num_ignored_columns + i],
-                  num_rows_to_append, pool));
+                              num_rows_to_append, pool));
   }
 
   return Status::OK();
@@ -2091,11 +2090,11 @@ void JoinResultMaterialize::Init(MemoryPool* pool,
   // Initialize mapping of columns from output batch column index to key and
   // payload batch column index.
   //
-  int num_probe_cols = probe_schemas_->num_cols(HashJoinProjection::OUTPUT)
-      + probe_schemas->num_cols(HashJoinProjection::OUTPUT_COMBINE);
+  int num_probe_cols = probe_schemas_->num_cols(HashJoinProjection::OUTPUT) +
+                       probe_schemas->num_cols(HashJoinProjection::OUTPUT_COMBINE);
   probe_output_to_key_and_payload_.reserve(num_probe_cols);
 
-  for (auto target: {HashJoinProjection::OUTPUT, HashJoinProjection::OUTPUT_COMBINE}) {
+  for (auto target : {HashJoinProjection::OUTPUT, HashJoinProjection::OUTPUT_COMBINE}) {
     int num_key_cols = probe_schemas_->num_cols(HashJoinProjection::KEY);
     auto to_key = probe_schemas_->map(target, HashJoinProjection::KEY);
     auto to_payload = probe_schemas_->map(target, HashJoinProjection::PAYLOAD);
@@ -2121,12 +2120,13 @@ void JoinResultMaterialize::SetBuildSide(const RowArray* build_keys,
 }
 
 bool JoinResultMaterialize::HasProbeOutput() const {
-  return probe_schemas_->num_cols(HashJoinProjection::OUTPUT)
-      + probe_schemas_->num_cols(HashJoinProjection::OUTPUT_COMBINE) > 0;
+  return probe_schemas_->num_cols(HashJoinProjection::OUTPUT) +
+             probe_schemas_->num_cols(HashJoinProjection::OUTPUT_COMBINE) >
+         0;
 }
 
 bool JoinResultMaterialize::HasBuildKeyOutput() const {
-  for (auto target: {HashJoinProjection::OUTPUT, HashJoinProjection::OUTPUT_COMBINE}) {
+  for (auto target : {HashJoinProjection::OUTPUT, HashJoinProjection::OUTPUT_COMBINE}) {
     auto to_key = build_schemas_->map(target, HashJoinProjection::KEY);
     for (int i = 0; i < build_schemas_->num_cols(target); ++i) {
       if (to_key.get(i) != SchemaProjectionMap::kMissingField) {
@@ -2193,7 +2193,7 @@ Status JoinResultMaterialize::AppendBuildOnly(int num_rows_to_append,
   if (HasProbeOutput()) {
     RETURN_NOT_OK(batch_builder_.AppendNulls(
         pool_, probe_schemas_->data_types(HashJoinProjection::OUTPUT),
-                    probe_schemas_->num_cols(HashJoinProjection::OUTPUT_COMBINE),
+        probe_schemas_->num_cols(HashJoinProjection::OUTPUT_COMBINE),
         num_rows_to_append));
   }
   if (NeedsKeyId()) {
@@ -2241,25 +2241,26 @@ Status JoinResultMaterialize::Append(const ExecBatch& key_and_payload,
 }
 
 Status JoinResultMaterialize::FlushBuildColumnIntoProbeColumn(
-    const std::shared_ptr<DataType>& data_type, const RowArray* row_array,
-    int column_id, uint32_t* row_ids, ResizableArrayData *result_column) {
-  //ResizableArrayData output;
-  //output.Init(data_type, pool_, bit_util::Log2(num_rows_));
+    const std::shared_ptr<DataType>& data_type, const RowArray* row_array, int column_id,
+    uint32_t* row_ids, ResizableArrayData* result_column) {
+  // ResizableArrayData output;
+  // output.Init(data_type, pool_, bit_util::Log2(num_rows_));
 
   int num_already_filled = result_column->num_rows();
 
   int num_null_ranges = null_ranges_.size();
-  int start_index = num_null_ranges == 0 ? 0 : null_ranges_[num_null_ranges - 1].first + null_ranges_[num_null_ranges - 1].second;
+  int start_index = num_null_ranges == 0 ? 0
+                                         : null_ranges_[num_null_ranges - 1].first +
+                                               null_ranges_[num_null_ranges - 1].second;
   assert(start_index == num_already_filled);
 
   if (start_index != num_rows_) {
-      RETURN_NOT_OK(row_array->DecodeSelected(
-          result_column, column_id, num_rows_ - start_index, row_ids + start_index, pool_));
+    RETURN_NOT_OK(row_array->DecodeSelected(
+        result_column, column_id, num_rows_ - start_index, row_ids + start_index, pool_));
   }
 
   return Status::OK();
 }
-
 
 Result<std::shared_ptr<ArrayData>> JoinResultMaterialize::FlushBuildColumn(
     const std::shared_ptr<DataType>& data_type, const RowArray* row_array, int column_id,
@@ -2299,12 +2300,15 @@ Status JoinResultMaterialize::Flush(ExecBatch* out) {
 
   if (HasProbeOutput()) {
     std::vector<ResizableArrayData> probe_batch = batch_builder_.Flush();
-    ARROW_DCHECK(static_cast<int>(probe_batch.size()) == num_probe_cols + num_combine_cols);
+    ARROW_DCHECK(static_cast<int>(probe_batch.size()) ==
+                 num_probe_cols + num_combine_cols);
     for (size_t i = 0; i < probe_batch.size(); ++i) {
       if (i < size_t(num_combine_cols)) {
-        auto to_key = build_schemas_->map(HashJoinProjection::OUTPUT_COMBINE, HashJoinProjection::KEY);
-        RETURN_NOT_OK(FlushBuildColumnIntoProbeColumn(build_schemas_->data_type(HashJoinProjection::OUTPUT_COMBINE, i),
-                                                  build_keys_, to_key.get(i), key_ids_.data(), &probe_batch[i]));
+        auto to_key = build_schemas_->map(HashJoinProjection::OUTPUT_COMBINE,
+                                          HashJoinProjection::KEY);
+        RETURN_NOT_OK(FlushBuildColumnIntoProbeColumn(
+            build_schemas_->data_type(HashJoinProjection::OUTPUT_COMBINE, i), build_keys_,
+            to_key.get(i), key_ids_.data(), &probe_batch[i]));
       }
       out->values[i] = probe_batch[i].array_data();
     }

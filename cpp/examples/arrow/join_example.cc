@@ -136,17 +136,18 @@ arrow::Status DoHashJoin() {
   ARROW_ASSIGN_OR_RAISE(right_source,
                         cp::MakeExecNode("scan", plan.get(), {}, r_scan_node_options));
 
-  arrow::compute::HashJoinNodeOptions join_opts{arrow::compute::JoinType::FULL_OUTER,
-                                                /*in_left_keys=*/{"lkey","shared"},
-                                                /*in_right_keys=*/{"rkey","shared"},
-                                                {"lkey", "shared", "ldistinct"},
-                                                {"lkey", "shared"},
-                                                {"rkey", "shared"},
-                                                {"rkey", "shared"},
-                                                {arrow::compute::JoinKeyCmp::EQ, arrow::compute::JoinKeyCmp::EQ},
-                                                /*filter*/ arrow::compute::literal(true),
-                                                /*output_suffix_for_left*/ "_l",
-                                                /*output_suffix_for_right*/ "_r"};
+  arrow::compute::HashJoinNodeOptions join_opts{
+      arrow::compute::JoinType::FULL_OUTER,
+      /*in_left_keys=*/{"lkey", "shared"},
+      /*in_right_keys=*/{"rkey", "shared"},
+      {"lkey", "shared", "ldistinct"},
+      {"lkey", "shared"},
+      {"rkey", "shared"},
+      {"rkey", "shared"},
+      {arrow::compute::JoinKeyCmp::EQ, arrow::compute::JoinKeyCmp::EQ},
+      /*filter*/ arrow::compute::literal(true),
+      /*output_suffix_for_left*/ "_l",
+      /*output_suffix_for_right*/ "_r"};
 
   ARROW_ASSIGN_OR_RAISE(
       auto hashjoin,

@@ -260,9 +260,8 @@ class ARROW_EXPORT HashJoinNodeOptions : public ExecNodeOptions {
   HashJoinNodeOptions(
       JoinType join_type, std::vector<FieldRef> left_keys,
       std::vector<FieldRef> right_keys, std::vector<FieldRef> left_output,
-      std::vector<FieldRef> left_combine_output,
-      std::vector<FieldRef> right_output, std::vector<FieldRef> right_combine_output,
-      std::vector<JoinKeyCmp> key_cmp,
+      std::vector<FieldRef> left_combine_output, std::vector<FieldRef> right_output,
+      std::vector<FieldRef> right_combine_output, std::vector<JoinKeyCmp> key_cmp,
       Expression filter = literal(true),
       std::string output_suffix_for_left = default_output_suffix_for_left,
       std::string output_suffix_for_right = default_output_suffix_for_right,

@@ -42,19 +42,22 @@ class ARROW_EXPORT HashJoinSchema {
 
   Status Init(JoinType join_type, const Schema& left_schema,
               const std::vector<FieldRef>& left_keys,
-              const std::vector<FieldRef>& left_output, const std::vector<FieldRef> &left_combine_output, const Schema& right_schema,
-              const std::vector<FieldRef>& right_keys,
-              const std::vector<FieldRef>& right_output, const std::vector<FieldRef> &right_combine_output,
-              const Expression& filter,
+              const std::vector<FieldRef>& left_output,
+              const std::vector<FieldRef>& left_combine_output,
+              const Schema& right_schema, const std::vector<FieldRef>& right_keys,
+              const std::vector<FieldRef>& right_output,
+              const std::vector<FieldRef>& right_combine_output, const Expression& filter,
               const std::string& left_field_name_prefix,
               const std::string& right_field_name_prefix);
 
   static Status ValidateSchemas(JoinType join_type, const Schema& left_schema,
                                 const std::vector<FieldRef>& left_keys,
-                                const std::vector<FieldRef>& left_output, const std::vector<FieldRef> &left_combine_output,
+                                const std::vector<FieldRef>& left_output,
+                                const std::vector<FieldRef>& left_combine_output,
                                 const Schema& right_schema,
                                 const std::vector<FieldRef>& right_keys,
-                                const std::vector<FieldRef>& right_output, const std::vector<FieldRef> &right_combine_output,
+                                const std::vector<FieldRef>& right_output,
+                                const std::vector<FieldRef>& right_combine_output,
                                 const std::string& left_field_name_prefix,
                                 const std::string& right_field_name_prefix);
 

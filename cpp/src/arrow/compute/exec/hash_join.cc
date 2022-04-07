@@ -19,12 +19,12 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <numeric>
 #include <unordered_map>
 #include <vector>
-#include <iostream>
 
 #include "arrow/compute/exec/hash_join_dict.h"
 #include "arrow/compute/exec/task_util.h"
@@ -453,10 +453,12 @@ class HashJoinBasicImpl : public HashJoinImpl {
                             hash_table_payloads_.Decode(batch_size_next, opt_right_ids));
     }
 
-    ProbeBatch_OutputOne(batch_size_next, has_left ? (left_key_use_right ? &right_key : &left_key) : nullptr,
-                         has_left_payload ? &left_payload : nullptr,
-                         has_right ? (right_key_use_left ? &left_key : &right_key) : nullptr,
-                         has_right_payload ? &right_payload : nullptr);
+    ProbeBatch_OutputOne(
+        batch_size_next,
+        has_left ? (left_key_use_right ? &right_key : &left_key) : nullptr,
+        has_left_payload ? &left_payload : nullptr,
+        has_right ? (right_key_use_left ? &left_key : &right_key) : nullptr,
+        has_right_payload ? &right_payload : nullptr);
 
     return Status::OK();
   }
@@ -481,7 +483,8 @@ class HashJoinBasicImpl : public HashJoinImpl {
         int64_t batch_size_next = std::min(static_cast<int64_t>(out_ids.size() - start),
                                            static_cast<int64_t>(output_batch_size_));
         RETURN_NOT_OK(ProbeBatch_OutputOne(thread_index, batch_size_next,
-                                           out_ids.data() + start, nullptr, false, false));
+                                           out_ids.data() + start, nullptr, false,
+                                           false));
       }
     } else {
       if (join_type_ == JoinType::LEFT_OUTER || join_type_ == JoinType::FULL_OUTER) {
@@ -545,7 +548,6 @@ class HashJoinBasicImpl : public HashJoinImpl {
     InitLocalStateIfNeeded(thread_index);
 
     std::cout << "ProbeBatch" << std::endl;
-
 
     local_state.exec_batch_keys.Clear();
 
@@ -779,9 +781,9 @@ class HashJoinBasicImpl : public HashJoinImpl {
       }
     }
 
-    RETURN_NOT_OK(
-        ProbeBatch_OutputOne(thread_index, static_cast<int64_t>(id_right.size()),
-                             use_left ? id_left.data() : nullptr, id_right.data(), true, false));
+    RETURN_NOT_OK(ProbeBatch_OutputOne(
+        thread_index, static_cast<int64_t>(id_right.size()),
+        use_left ? id_left.data() : nullptr, id_right.data(), true, false));
     return Status::OK();
   }
 
