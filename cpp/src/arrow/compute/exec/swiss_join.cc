@@ -20,7 +20,6 @@
 #include <algorithm>  // std::upper_bound
 #include <cstdio>
 #include <cstdlib>
-#include <iostream>
 #include <mutex>
 #include "arrow/array/util.h"  // MakeArrayFromScalar
 #include "arrow/compute/exec/hash_join.h"
@@ -2101,10 +2100,8 @@ void JoinResultMaterialize::Init(MemoryPool* pool,
 
     for (int i = 0; i < probe_schemas->num_cols(target); ++i) {
       if (to_key.get(i) == SchemaProjectionMap::kMissingField) {
-        std::cout << "Probe Payload " << i << std::endl;
         probe_output_to_key_and_payload_.push_back(to_payload.get(i) + num_key_cols);
       } else {
-        std::cout << "Probe Key " << i << std::endl;
         probe_output_to_key_and_payload_.push_back(to_key.get(i));
       }
     }
@@ -2243,8 +2240,6 @@ Status JoinResultMaterialize::Append(const ExecBatch& key_and_payload,
 Status JoinResultMaterialize::FlushBuildColumnIntoProbeColumn(
     const std::shared_ptr<DataType>& data_type, const RowArray* row_array, int column_id,
     uint32_t* row_ids, ResizableArrayData* result_column) {
-  // ResizableArrayData output;
-  // output.Init(data_type, pool_, bit_util::Log2(num_rows_));
 
   int num_already_filled = result_column->num_rows();
 

@@ -74,7 +74,7 @@ using int64_for_gather_t = const long long int;  // NOLINT runtime-int
 //
 // They should only be allocated on the stack to guarantee the right sequence
 // of allocation and deallocation of vectors from TempVectorStack.
-// join
+//
 class MiniBatch {
  public:
   static constexpr int kLogMiniBatchLength = 10;
