@@ -28,8 +28,6 @@
 #include "arrow/util/make_unique.h"
 #include "arrow/util/thread_pool.h"
 
-#include <iostream>
-
 namespace arrow {
 
 using internal::checked_cast;
@@ -295,10 +293,6 @@ std::shared_ptr<Schema> HashJoinSchema::MakeOutputSchema(
   int left_size = proj_maps[0].num_cols(HashJoinProjection::OUTPUT);
   int right_size = proj_maps[1].num_cols(HashJoinProjection::OUTPUT);
   int combine_size = proj_maps[1].num_cols(HashJoinProjection::OUTPUT_COMBINE);
-  std::cout << "combine_size = "
-            << proj_maps[0].num_cols(HashJoinProjection::OUTPUT_COMBINE) << std::endl;
-  std::cout << "combine_size = "
-            << proj_maps[1].num_cols(HashJoinProjection::OUTPUT_COMBINE) << std::endl;
 
   ARROW_CHECK_EQ(combine_size, proj_maps[0].num_cols(HashJoinProjection::OUTPUT_COMBINE));
   fields.resize(combine_size + left_size + right_size);

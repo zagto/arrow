@@ -2186,7 +2186,6 @@ Status JoinResultMaterialize::AppendBuildOnly(int num_rows_to_append,
                                               int* num_rows_appended) {
   num_rows_to_append =
       std::min(ExecBatchBuilder::num_rows_max() - num_rows_, num_rows_to_append);
-
   if (HasProbeOutput()) {
     RETURN_NOT_OK(batch_builder_.AppendNulls(
         pool_, probe_schemas_->data_types(HashJoinProjection::OUTPUT),
