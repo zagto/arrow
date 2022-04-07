@@ -2313,7 +2313,6 @@ Status JoinResultMaterialize::Flush(ExecBatch* out) {
       build_schemas_->map(HashJoinProjection::OUTPUT, HashJoinProjection::PAYLOAD);
   for (int i = 0; i < num_build_cols; ++i) {
     if (to_key.get(i) != SchemaProjectionMap::kMissingField) {
-      std::cout << "flushing key column" << std::endl;
       std::shared_ptr<ArrayData> column;
       ARROW_ASSIGN_OR_RAISE(
           column,
@@ -2323,7 +2322,6 @@ Status JoinResultMaterialize::Flush(ExecBatch* out) {
 
     } else if (to_payload.get(i) != SchemaProjectionMap::kMissingField) {
       std::shared_ptr<ArrayData> column;
-      std::cout << "flushing payload column" << std::endl;
       ARROW_ASSIGN_OR_RAISE(
           column,
           FlushBuildColumn(
@@ -2404,9 +2402,6 @@ bool JoinMatchIterator::GetNextBatch(int num_rows_max, int* out_num_rows,
                                      uint16_t* batch_row_ids, uint32_t* key_ids,
                                      uint32_t* payload_ids) {
   *out_num_rows = 0;
-
-  std::cout << "Swiss Join" << std::endl;
-
   if (no_duplicate_keys_) {
     // When every input key can have at most one match,
     // then we only need to filter according to has match bit vector.
