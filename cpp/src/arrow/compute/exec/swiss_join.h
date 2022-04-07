@@ -87,15 +87,15 @@ class ExecBatchBuilder {
 
   Status AppendNulls(MemoryPool* pool,
                      const std::vector<std::shared_ptr<DataType>>& types,
-                     int num_rows_to_append);
+                     int num_ignored_columns, int num_rows_to_append);
 
-  Status AppendNulls(MemoryPool* pool,
-                     const std::vector<std::shared_ptr<DataType>>& types,
-                     int num_rows_to_append, int* num_appended);
+  /*Status AppendNulls(MemoryPool* pool,
+                     const std::vector<std::shared_ptr<DataType>>& types, int
+     num_ignored_columns, int num_rows_to_append, int* num_appended);*/
 
   // Should only be called if num_rows() returns non-zero.
   //
-  ExecBatch Flush();
+  std::vector<ResizableArrayData> Flush();
 
   int num_rows() const { return values_.empty() ? 0 : values_[0].num_rows(); }
 
@@ -744,6 +744,11 @@ class JoinResultMaterialize {
   bool HasBuildPayloadOutput() const;
   bool NeedsKeyId() const;
   bool NeedsPayloadId() const;
+  Status FlushBuildColumnIntoProbeColumn(const std::shared_ptr<DataType>& data_type,
+                                         const RowArray* row_array, int column_id,
+                                         uint32_t* row_ids,
+                                         ResizableArrayData* result_column);
+
   Result<std::shared_ptr<ArrayData>> FlushBuildColumn(
       const std::shared_ptr<DataType>& data_type, const RowArray* row_array,
       int column_id, uint32_t* row_ids);
