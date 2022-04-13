@@ -47,6 +47,11 @@ class ARROW_TESTING_EXPORT UuidType : public ExtensionType {
       const std::string& serialized) const override;
 
   std::string Serialize() const override { return "uuid-serialized"; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<UuidType>(*this);
+  }
+
 };
 
 class ARROW_TESTING_EXPORT SmallintArray : public ExtensionArray {
@@ -74,6 +79,11 @@ class ARROW_TESTING_EXPORT SmallintType : public ExtensionType {
       const std::string& serialized) const override;
 
   std::string Serialize() const override { return "smallint"; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<SmallintType>(*this);
+  }
+
 };
 
 class ARROW_TESTING_EXPORT ListExtensionType : public ExtensionType {
@@ -91,6 +101,11 @@ class ARROW_TESTING_EXPORT ListExtensionType : public ExtensionType {
       const std::string& serialized) const override;
 
   std::string Serialize() const override { return "list-ext"; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<ListExtensionType>(*this);
+  }
+
 };
 
 class ARROW_TESTING_EXPORT DictExtensionType : public ExtensionType {
@@ -108,6 +123,11 @@ class ARROW_TESTING_EXPORT DictExtensionType : public ExtensionType {
       const std::string& serialized) const override;
 
   std::string Serialize() const override { return "dict-extension-serialized"; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<DictExtensionType>(*this);
+  }
+
 };
 
 class ARROW_TESTING_EXPORT Complex128Array : public ExtensionArray {
@@ -132,6 +152,11 @@ class ARROW_TESTING_EXPORT Complex128Type : public ExtensionType {
       const std::string& serialized) const override;
 
   std::string Serialize() const override { return "complex128-serialized"; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<Complex128Type>(*this);
+  }
+
 };
 
 ARROW_TESTING_EXPORT
