@@ -108,7 +108,7 @@ class ARROW_EXPORT Expression {
 
   /// The type and shape to which this expression will evaluate
   ValueDescr descr() const;
-  std::shared_ptr<DataType> type() const { return descr().type; }
+  const std::shared_ptr<DataType> &type() const;
   // XXX someday
   // NullGeneralization::type nullable() const;
 
