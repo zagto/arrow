@@ -75,11 +75,6 @@ class IPv4Type : public ExtensionType {
   }
 
   std::string Serialize() const override { return ""; }
-  std::shared_ptr<arrow::DataType> Clone() const override {
-    return std::make_shared<IPv4Type>(*this);
-  }
-
-
 };
 
 TEST(TestArrayView, IdentityPrimitive) {
