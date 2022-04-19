@@ -88,8 +88,13 @@ class Parametric1Type : public ExtensionType {
     return result;
   }
 
- private:
+
   int32_t parameter_;
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<Parametric1Type>(*this);
+  }
+
 };
 
 // A parametric type where the extension_name() is different for each
@@ -134,8 +139,12 @@ class Parametric2Type : public ExtensionType {
     return result;
   }
 
- private:
   int32_t parameter_;
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<Parametric2Type>(*this);
+  }
+
 };
 
 // An extension type with a non-primitive storage type
@@ -174,6 +183,11 @@ class ExtStructType : public ExtensionType {
   }
 
   std::string Serialize() const override { return "ext-struct-type-unique-code"; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<ExtStructType>(*this);
+  }
+
 };
 
 class TestExtensionType : public ::testing::Test {

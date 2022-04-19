@@ -59,6 +59,15 @@ class ARROW_EXPORT Fingerprintable {
  public:
   virtual ~Fingerprintable();
 
+  Fingerprintable() {}
+  Fingerprintable(const Fingerprintable &other) {
+    std::string *other_string = other.fingerprint_.load();
+    fingerprint_.store(other_string ? new std::string(*other_string) : nullptr);
+    other_string = other.metadata_fingerprint_.load();
+    metadata_fingerprint_.store(other_string ? new std::string(*other_string) : nullptr);
+
+  }
+
   const std::string& fingerprint() const {
     auto p = fingerprint_.load();
     if (ARROW_PREDICT_TRUE(p != NULLPTR)) {
@@ -81,7 +90,7 @@ class ARROW_EXPORT Fingerprintable {
 
   virtual std::string ComputeFingerprint() const = 0;
   virtual std::string ComputeMetadataFingerprint() const = 0;
-
+public:
   mutable std::atomic<std::string*> fingerprint_{NULLPTR};
   mutable std::atomic<std::string*> metadata_fingerprint_{NULLPTR};
 };
@@ -174,6 +183,8 @@ class ARROW_EXPORT DataType : public detail::Fingerprintable {
   /// \brief Return the type category of the storage type
   virtual Type::type storage_id() const { return id_; }
 
+  virtual std::shared_ptr<DataType> Clone() const = 0;
+
  protected:
   // Dummy version that returns a null string (indicating not implemented).
   // Subclasses should override for fast equality checks.
@@ -181,12 +192,14 @@ class ARROW_EXPORT DataType : public detail::Fingerprintable {
 
   // Generic versions that works for all regular types, nested or not.
   std::string ComputeMetadataFingerprint() const override;
-
+public:
   Type::type id_;
   std::vector<std::shared_ptr<Field>> children_;
 
- private:
-  ARROW_DISALLOW_COPY_AND_ASSIGN(DataType);
+ //private:
+ // ARROW_DISALLOW_COPY_AND_ASSIGN(DataType);
+  DataType(const DataType &other) = default;
+
 };
 
 ARROW_EXPORT
@@ -252,6 +265,9 @@ class ParametricType {};
 class ARROW_EXPORT NestedType : public DataType, public ParametricType {
  public:
   using DataType::DataType;
+
+  NestedType(const NestedType &other) = default;
+
 };
 
 /// \brief The combination of a field name and data type, with optional metadata
@@ -366,6 +382,7 @@ class ARROW_EXPORT Field : public detail::Fingerprintable {
   std::string ComputeFingerprint() const override;
   std::string ComputeMetadataFingerprint() const override;
 
+public:
   ARROW_EXPORT friend void PrintTo(const Field& field, std::ostream* os);
 
   // Field name
@@ -404,6 +421,11 @@ class ARROW_EXPORT CTypeImpl : public BASE {
   std::string name() const override { return DERIVED::type_name(); }
 
   std::string ToString() const override { return this->name(); }
+
+  virtual std::shared_ptr<DataType> Clone() const override {
+    return std::make_shared<DERIVED>(*static_cast<const DERIVED*>(this));
+  }
+
 };
 
 template <typename DERIVED, typename BASE, Type::type TYPE_ID, typename C_TYPE>
@@ -432,6 +454,11 @@ class ARROW_EXPORT NullType : public DataType {
   }
 
   std::string name() const override { return "null"; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<NullType>(*this);
+  }
+
 
  protected:
   std::string ComputeFingerprint() const override;
@@ -607,6 +634,11 @@ class ARROW_EXPORT BinaryType : public BaseBinaryType {
   std::string ToString() const override;
   std::string name() const override { return "binary"; }
 
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<BinaryType>(*this);
+  }
+
+
  protected:
   std::string ComputeFingerprint() const override;
 
@@ -635,6 +667,11 @@ class ARROW_EXPORT LargeBinaryType : public BaseBinaryType {
   std::string ToString() const override;
   std::string name() const override { return "large_binary"; }
 
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<LargeBinaryType>(*this);
+  }
+
+
  protected:
   std::string ComputeFingerprint() const override;
 
@@ -656,6 +693,11 @@ class ARROW_EXPORT StringType : public BinaryType {
   std::string ToString() const override;
   std::string name() const override { return "utf8"; }
 
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<StringType>(*this);
+  }
+
+
  protected:
   std::string ComputeFingerprint() const override;
 };
@@ -673,6 +715,11 @@ class ARROW_EXPORT LargeStringType : public LargeBinaryType {
 
   std::string ToString() const override;
   std::string name() const override { return "large_utf8"; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<LargeStringType>(*this);
+  }
+
 
  protected:
   std::string ComputeFingerprint() const override;
@@ -707,8 +754,13 @@ class ARROW_EXPORT FixedSizeBinaryType : public FixedWidthType, public Parametri
 
  protected:
   std::string ComputeFingerprint() const override;
-
+public:
   int32_t byte_width_;
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<FixedSizeBinaryType>(*this);
+  }
+
 };
 
 /// @}
@@ -775,6 +827,10 @@ class ARROW_EXPORT Decimal128Type : public DecimalType {
   static constexpr int32_t kMinPrecision = 1;
   static constexpr int32_t kMaxPrecision = 38;
   static constexpr int32_t kByteWidth = 16;
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<Decimal128Type>(*this);
+  }
 };
 
 /// \brief Concrete type class for 256-bit decimal data
@@ -808,6 +864,11 @@ class ARROW_EXPORT Decimal256Type : public DecimalType {
   static constexpr int32_t kMinPrecision = 1;
   static constexpr int32_t kMaxPrecision = 76;
   static constexpr int32_t kByteWidth = 32;
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<Decimal256Type>(*this);
+  }
+
 };
 
 /// @}
@@ -823,6 +884,19 @@ class ARROW_EXPORT BaseListType : public NestedType {
   const std::shared_ptr<Field>& value_field() const { return children_[0]; }
 
   std::shared_ptr<DataType> value_type() const { return children_[0]->type(); }
+
+  BaseListType(const BaseListType &other) = default;
+
+};
+
+template<typename T> class ARROW_EXPORT BaseListTypeCRTP : public BaseListType {
+public:
+  using BaseListType::BaseListType;
+  virtual std::shared_ptr<DataType> Clone() const override {
+    return std::make_shared<T>(*static_cast<const T*>(this));
+  }
+
+  BaseListTypeCRTP(const BaseListTypeCRTP &other) = default;
 };
 
 /// \brief Concrete type class for list data
@@ -830,7 +904,7 @@ class ARROW_EXPORT BaseListType : public NestedType {
 /// List data is nested data where each value is a variable number of
 /// child items.  Lists can be recursively nested, for example
 /// list(list(int32)).
-class ARROW_EXPORT ListType : public BaseListType {
+class ARROW_EXPORT ListType : public BaseListTypeCRTP<ListType> {
  public:
   static constexpr Type::type type_id = Type::LIST;
   using offset_type = int32_t;
@@ -841,7 +915,7 @@ class ARROW_EXPORT ListType : public BaseListType {
   explicit ListType(const std::shared_ptr<DataType>& value_type)
       : ListType(std::make_shared<Field>("item", value_type)) {}
 
-  explicit ListType(const std::shared_ptr<Field>& value_field) : BaseListType(type_id) {
+  explicit ListType(const std::shared_ptr<Field>& value_field) : BaseListTypeCRTP<ListType>(type_id) {
     children_ = {value_field};
   }
 
@@ -861,7 +935,7 @@ class ARROW_EXPORT ListType : public BaseListType {
 /// \brief Concrete type class for large list data
 ///
 /// LargeListType is like ListType but with 64-bit rather than 32-bit offsets.
-class ARROW_EXPORT LargeListType : public BaseListType {
+class ARROW_EXPORT LargeListType : public BaseListTypeCRTP<LargeListType> {
  public:
   static constexpr Type::type type_id = Type::LARGE_LIST;
   using offset_type = int64_t;
@@ -873,7 +947,7 @@ class ARROW_EXPORT LargeListType : public BaseListType {
       : LargeListType(std::make_shared<Field>("item", value_type)) {}
 
   explicit LargeListType(const std::shared_ptr<Field>& value_field)
-      : BaseListType(type_id) {
+      : BaseListTypeCRTP(type_id) {
     children_ = {value_field};
   }
 
@@ -937,7 +1011,7 @@ class ARROW_EXPORT MapType : public ListType {
 };
 
 /// \brief Concrete type class for fixed size list data
-class ARROW_EXPORT FixedSizeListType : public BaseListType {
+class ARROW_EXPORT FixedSizeListType : public BaseListTypeCRTP<FixedSizeListType> {
  public:
   static constexpr Type::type type_id = Type::FIXED_SIZE_LIST;
   // While the individual item size is 32-bit, the overall data size
@@ -951,9 +1025,11 @@ class ARROW_EXPORT FixedSizeListType : public BaseListType {
       : FixedSizeListType(std::make_shared<Field>("item", value_type), list_size) {}
 
   FixedSizeListType(const std::shared_ptr<Field>& value_field, int32_t list_size)
-      : BaseListType(type_id), list_size_(list_size) {
+      : BaseListTypeCRTP<FixedSizeListType>(type_id), list_size_(list_size) {
     children_ = {value_field};
   }
+
+  FixedSizeListType(const FixedSizeListType &other) = default;
 
   DataTypeLayout layout() const override {
     return DataTypeLayout({DataTypeLayout::Bitmap()});
@@ -967,7 +1043,7 @@ class ARROW_EXPORT FixedSizeListType : public BaseListType {
 
  protected:
   std::string ComputeFingerprint() const override;
-
+public:
   int32_t list_size_;
 };
 
@@ -1014,8 +1090,14 @@ class ARROW_EXPORT StructType : public NestedType {
  private:
   std::string ComputeFingerprint() const override;
 
+public:
   class Impl;
-  std::unique_ptr<Impl> impl_;
+  std::shared_ptr<Impl> impl_;
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<StructType>(*this);
+  }
+
 };
 
 /// \brief Base type class for union data
@@ -1091,6 +1173,11 @@ class ARROW_EXPORT SparseUnionType : public UnionType {
       std::vector<std::shared_ptr<Field>> fields, std::vector<int8_t> type_codes);
 
   std::string name() const override { return "sparse_union"; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<SparseUnionType>(*this);
+  }
+
 };
 
 /// \brief Concrete type class for dense union data
@@ -1121,6 +1208,11 @@ class ARROW_EXPORT DenseUnionType : public UnionType {
       std::vector<std::shared_ptr<Field>> fields, std::vector<int8_t> type_codes);
 
   std::string name() const override { return "dense_union"; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<DenseUnionType>(*this);
+  }
+
 };
 
 /// @}
@@ -1171,6 +1263,11 @@ class ARROW_EXPORT Date32Type : public DateType {
   std::string name() const override { return "date32"; }
   DateUnit unit() const override { return UNIT; }
 
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<Date32Type>(*this);
+  }
+
+
  protected:
   std::string ComputeFingerprint() const override;
 };
@@ -1193,6 +1290,11 @@ class ARROW_EXPORT Date64Type : public DateType {
 
   std::string name() const override { return "date64"; }
   DateUnit unit() const override { return UNIT; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<Date64Type>(*this);
+  }
+
 
  protected:
   std::string ComputeFingerprint() const override;
@@ -1230,6 +1332,11 @@ class ARROW_EXPORT Time32Type : public TimeType {
   std::string ToString() const override;
 
   std::string name() const override { return "time32"; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<Time32Type>(*this);
+  }
+
 };
 
 /// Concrete type class for 64-bit time data (as number of microseconds or nanoseconds
@@ -1249,6 +1356,11 @@ class ARROW_EXPORT Time64Type : public TimeType {
   std::string ToString() const override;
 
   std::string name() const override { return "time64"; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<Time64Type>(*this);
+  }
+
 };
 
 /// \brief Concrete type class for datetime data (as number of seconds, milliseconds,
@@ -1310,9 +1422,14 @@ class ARROW_EXPORT TimestampType : public TemporalType, public ParametricType {
  protected:
   std::string ComputeFingerprint() const override;
 
- private:
+ public:
   TimeUnit::type unit_;
   std::string timezone_;
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<TimestampType>(*this);
+  }
+
 };
 
 // Base class for the different kinds of calendar intervals.
@@ -1347,6 +1464,11 @@ class ARROW_EXPORT MonthIntervalType : public IntervalType {
 
   std::string ToString() const override { return name(); }
   std::string name() const override { return "month_interval"; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<MonthIntervalType>(*this);
+  }
+
 };
 
 /// \brief Represents a number of days and milliseconds (fraction of day).
@@ -1383,6 +1505,11 @@ class ARROW_EXPORT DayTimeIntervalType : public IntervalType {
 
   std::string ToString() const override { return name(); }
   std::string name() const override { return "day_time_interval"; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<DayTimeIntervalType>(*this);
+  }
+
 };
 
 ARROW_EXPORT
@@ -1423,6 +1550,11 @@ class ARROW_EXPORT MonthDayNanoIntervalType : public IntervalType {
 
   std::string ToString() const override { return name(); }
   std::string name() const override { return "month_day_nano_interval"; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<MonthDayNanoIntervalType>(*this);
+  }
+
 };
 
 ARROW_EXPORT
@@ -1449,6 +1581,11 @@ class ARROW_EXPORT DurationType : public TemporalType, public ParametricType {
   std::string name() const override { return "duration"; }
 
   TimeUnit::type unit() const { return unit_; }
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<DurationType>(*this);
+  }
+
 
  protected:
   std::string ComputeFingerprint() const override;
@@ -1495,12 +1632,19 @@ class ARROW_EXPORT DictionaryType : public FixedWidthType {
   static Status ValidateParameters(const DataType& index_type,
                                    const DataType& value_type);
 
-  std::string ComputeFingerprint() const override;
+std::string ComputeFingerprint() const override;
+
+public:
 
   // Must be an integer type (not currently checked)
   std::shared_ptr<DataType> index_type_;
   std::shared_ptr<DataType> value_type_;
   bool ordered_;
+
+  std::shared_ptr<arrow::DataType> Clone() const override {
+    return std::make_shared<DictionaryType>(*this);
+  }
+
 };
 
 // ----------------------------------------------------------------------
