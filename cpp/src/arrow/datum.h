@@ -40,6 +40,11 @@ class ChunkedArray;
 class RecordBatch;
 class Table;
 
+/*struct ARROW_EXPORT TypeRegistryReference {
+  TypeRegistry *registry;
+  size_t id;
+};*/
+
 /// \brief A descriptor type that gives the shape (array or scalar) and
 /// DataType of a Value, but without the data
 struct ARROW_EXPORT ValueDescr {
@@ -66,18 +71,18 @@ struct ARROW_EXPORT ValueDescr {
       : type(std::move(type)), shape(ValueDescr::ANY) {}
 
   /// \brief Convenience constructor for ANY descr
-  static ValueDescr Any(std::shared_ptr<DataType> type) {
-    return ValueDescr(std::move(type), ANY);
+  static ValueDescr Any(const std::shared_ptr<DataType>& type) {
+    return ValueDescr(type, ANY);
   }
 
   /// \brief Convenience constructor for Value::ARRAY descr
-  static ValueDescr Array(std::shared_ptr<DataType> type) {
-    return ValueDescr(std::move(type), ARRAY);
+  static ValueDescr Array(const std::shared_ptr<DataType>& type) {
+    return ValueDescr(type, ARRAY);
   }
 
   /// \brief Convenience constructor for Value::SCALAR descr
-  static ValueDescr Scalar(std::shared_ptr<DataType> type) {
-    return ValueDescr(std::move(type), SCALAR);
+  static ValueDescr Scalar(const std::shared_ptr<DataType>& type) {
+    return ValueDescr(type, SCALAR);
   }
 
   bool operator==(const ValueDescr& other) const {
@@ -111,7 +116,7 @@ struct ARROW_EXPORT Datum {
   // current variant does not have a length.
   static constexpr int64_t kUnknownLength = -1;
 
-  util::Variant<Empty, std::shared_ptr<Scalar>, std::shared_ptr<ArrayData>,
+  util::Variant<Empty, std::shared_ptr<Scalar>, std::shared_ptr<ExecArrayData>,
                 std::shared_ptr<ChunkedArray>, std::shared_ptr<RecordBatch>,
                 std::shared_ptr<Table>>
       value;
@@ -127,11 +132,15 @@ struct ARROW_EXPORT Datum {
   Datum(std::shared_ptr<Scalar> value)  // NOLINT implicit conversion
       : value(std::move(value)) {}
 
+  // TODO: move?
   Datum(std::shared_ptr<ArrayData> value)  // NOLINT implicit conversion
+      : value(std::make_shared<ExecArrayData>(*value)) {}
+
+  Datum(std::shared_ptr<ExecArrayData> value)  // NOLINT implicit conversion
       : value(std::move(value)) {}
 
   Datum(ArrayData arg)  // NOLINT implicit conversion
-      : value(std::make_shared<ArrayData>(std::move(arg))) {}
+      : value(std::make_shared<ExecArrayData>(arg)) {}
 
   Datum(const Array& value);                   // NOLINT implicit conversion
   Datum(const std::shared_ptr<Array>& value);  // NOLINT implicit conversion
@@ -195,8 +204,8 @@ struct ARROW_EXPORT Datum {
     }
   }
 
-  const std::shared_ptr<ArrayData>& array() const {
-    return util::get<std::shared_ptr<ArrayData>>(this->value);
+  const std::shared_ptr<ExecArrayData>& array() const {
+    return util::get<std::shared_ptr<ExecArrayData>>(this->value);
   }
 
   /// \brief The sum of bytes in each buffer referenced by the datum
@@ -204,7 +213,7 @@ struct ARROW_EXPORT Datum {
   /// \see arrow::util::TotalBufferSize for caveats
   int64_t TotalBufferSize() const;
 
-  ArrayData* mutable_array() const { return this->array().get(); }
+  ExecArrayData* mutable_array() const { return this->array().get(); }
 
   std::shared_ptr<Array> make_array() const;
 
@@ -258,7 +267,7 @@ struct ARROW_EXPORT Datum {
   /// \brief The value type of the variant, if any
   ///
   /// \return nullptr if no type
-  const std::shared_ptr<DataType>& type() const;
+  const std::shared_ptr<DataType> &type() const;
 
   /// \brief The schema of the variant, if any
   ///

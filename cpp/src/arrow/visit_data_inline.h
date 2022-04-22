@@ -40,7 +40,7 @@ struct ArrayDataInlineVisitor<T, enable_if_has_c_type<T>> {
   using c_type = typename T::c_type;
 
   template <typename ValidFunc, typename NullFunc>
-  static Status VisitStatus(const ArrayData& arr, ValidFunc&& valid_func,
+  static Status VisitStatus(const ArrayDataBase& arr, ValidFunc&& valid_func,
                             NullFunc&& null_func) {
     const c_type* data = arr.GetValues<c_type>(1);
     auto visit_valid = [&](int64_t i) { return valid_func(data[i]); };
@@ -49,7 +49,7 @@ struct ArrayDataInlineVisitor<T, enable_if_has_c_type<T>> {
   }
 
   template <typename ValidFunc, typename NullFunc>
-  static void VisitVoid(const ArrayData& arr, ValidFunc&& valid_func,
+  static void VisitVoid(const ArrayDataBase& arr, ValidFunc&& valid_func,
                         NullFunc&& null_func) {
     using c_type = typename T::c_type;
     const c_type* data = arr.GetValues<c_type>(1);
@@ -65,7 +65,7 @@ struct ArrayDataInlineVisitor<BooleanType> {
   using c_type = bool;
 
   template <typename ValidFunc, typename NullFunc>
-  static Status VisitStatus(const ArrayData& arr, ValidFunc&& valid_func,
+  static Status VisitStatus(const ArrayDataBase& arr, ValidFunc&& valid_func,
                             NullFunc&& null_func) {
     int64_t offset = arr.offset;
     const uint8_t* data = arr.buffers[1]->data();
@@ -76,7 +76,7 @@ struct ArrayDataInlineVisitor<BooleanType> {
   }
 
   template <typename ValidFunc, typename NullFunc>
-  static void VisitVoid(const ArrayData& arr, ValidFunc&& valid_func,
+  static void VisitVoid(const ArrayDataBase& arr, ValidFunc&& valid_func,
                         NullFunc&& null_func) {
     int64_t offset = arr.offset;
     const uint8_t* data = arr.buffers[1]->data();
@@ -93,7 +93,7 @@ struct ArrayDataInlineVisitor<T, enable_if_base_binary<T>> {
   using c_type = util::string_view;
 
   template <typename ValidFunc, typename NullFunc>
-  static Status VisitStatus(const ArrayData& arr, ValidFunc&& valid_func,
+  static Status VisitStatus(const ArrayDataBase& arr, ValidFunc&& valid_func,
                             NullFunc&& null_func) {
     using offset_type = typename T::offset_type;
     constexpr char empty_value = 0;
@@ -126,7 +126,7 @@ struct ArrayDataInlineVisitor<T, enable_if_base_binary<T>> {
   }
 
   template <typename ValidFunc, typename NullFunc>
-  static void VisitVoid(const ArrayData& arr, ValidFunc&& valid_func,
+  static void VisitVoid(const ArrayDataBase& arr, ValidFunc&& valid_func,
                         NullFunc&& null_func) {
     using offset_type = typename T::offset_type;
     constexpr uint8_t empty_value = 0;
@@ -161,9 +161,9 @@ struct ArrayDataInlineVisitor<T, enable_if_fixed_size_binary<T>> {
   using c_type = util::string_view;
 
   template <typename ValidFunc, typename NullFunc>
-  static Status VisitStatus(const ArrayData& arr, ValidFunc&& valid_func,
+  static Status VisitStatus(const ArrayDataBase& arr, ValidFunc&& valid_func,
                             NullFunc&& null_func) {
-    const auto& fw_type = internal::checked_cast<const FixedSizeBinaryType&>(*arr.type);
+    const auto& fw_type = internal::checked_cast<const FixedSizeBinaryType&>(arr.Type());
 
     const int32_t byte_width = fw_type.byte_width();
     const char* data = arr.GetValues<char>(1,
@@ -183,9 +183,9 @@ struct ArrayDataInlineVisitor<T, enable_if_fixed_size_binary<T>> {
   }
 
   template <typename ValidFunc, typename NullFunc>
-  static void VisitVoid(const ArrayData& arr, ValidFunc&& valid_func,
+  static void VisitVoid(const ArrayDataBase& arr, ValidFunc&& valid_func,
                         NullFunc&& null_func) {
-    const auto& fw_type = internal::checked_cast<const FixedSizeBinaryType&>(*arr.type);
+    const auto& fw_type = internal::checked_cast<const FixedSizeBinaryType&>(arr.Type());
 
     const int32_t byte_width = fw_type.byte_width();
     const char* data = arr.GetValues<char>(1,
@@ -221,14 +221,14 @@ struct ArrayDataInlineVisitor<T, enable_if_fixed_size_binary<T>> {
 
 template <typename T, typename ValidFunc, typename NullFunc>
 typename internal::call_traits::enable_if_return<ValidFunc, Status>::type
-VisitArrayDataInline(const ArrayData& arr, ValidFunc&& valid_func, NullFunc&& null_func) {
+VisitArrayDataInline(const ArrayDataBase& arr, ValidFunc&& valid_func, NullFunc&& null_func) {
   return internal::ArrayDataInlineVisitor<T>::VisitStatus(
       arr, std::forward<ValidFunc>(valid_func), std::forward<NullFunc>(null_func));
 }
 
 template <typename T, typename ValidFunc, typename NullFunc>
 typename internal::call_traits::enable_if_return<ValidFunc, void>::type
-VisitArrayDataInline(const ArrayData& arr, ValidFunc&& valid_func, NullFunc&& null_func) {
+VisitArrayDataInline(const ArrayDataBase& arr, ValidFunc&& valid_func, NullFunc&& null_func) {
   return internal::ArrayDataInlineVisitor<T>::VisitVoid(
       arr, std::forward<ValidFunc>(valid_func), std::forward<NullFunc>(null_func));
 }
@@ -250,7 +250,7 @@ struct ArrayDataVisitor {
   using c_type = typename InlineVisitorType::c_type;
 
   template <typename Visitor>
-  static Status Visit(const ArrayData& arr, Visitor* visitor) {
+  static Status Visit(const ArrayDataBase& arr, Visitor* visitor) {
     return InlineVisitorType::VisitStatus(
         arr, [visitor](c_type v) { return visitor->VisitValue(v); },
         [visitor]() { return visitor->VisitNull(); });

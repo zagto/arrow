@@ -305,6 +305,9 @@ ExecNode::ExecNode(ExecPlan* plan, NodeVector inputs,
   for (auto input : inputs_) {
     input->outputs_.push_back(this);
   }
+  for (auto &field : output_schema_->fields()) {
+    plan->RegisterDataType(field->type());
+  }
 }
 
 Status ExecNode::Validate() const {

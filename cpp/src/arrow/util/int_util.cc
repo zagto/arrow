@@ -625,7 +625,7 @@ Status IntegersInRange(const Datum& datum, CType bound_lower, CType bound_upper)
     return Status::OK();
   }
 
-  const ArrayData& indices = *datum.array();
+  const ExecArrayData& indices = *datum.array();
   const CType* indices_data = indices.GetValues<CType>(1);
   const uint8_t* bitmap = nullptr;
   if (indices.buffers[0]) {

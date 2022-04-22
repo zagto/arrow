@@ -237,7 +237,7 @@ struct ArrayIterator<Type, enable_if_c_number_or_decimal<Type>> {
   using T = typename TypeTraits<Type>::ScalarType::ValueType;
   const T* values;
 
-  explicit ArrayIterator(const ArrayData& data) : values(data.GetValues<T>(1)) {}
+  explicit ArrayIterator(const ArrayDataBase& data) : values(data.GetValues<T>(1)) {}
   T operator()() { return *values++; }
 };
 
@@ -245,7 +245,7 @@ template <typename Type>
 struct ArrayIterator<Type, enable_if_boolean<Type>> {
   BitmapReader reader;
 
-  explicit ArrayIterator(const ArrayData& data)
+  explicit ArrayIterator(const ArrayDataBase& data)
       : reader(data.buffers[1]->data(), data.offset, data.length) {}
   bool operator()() {
     bool out = reader.IsSet();
@@ -257,13 +257,13 @@ struct ArrayIterator<Type, enable_if_boolean<Type>> {
 template <typename Type>
 struct ArrayIterator<Type, enable_if_base_binary<Type>> {
   using offset_type = typename Type::offset_type;
-  const ArrayData& arr;
+  const ArrayDataBase& arr;
   const offset_type* offsets;
   offset_type cur_offset;
   const char* data;
   int64_t position;
 
-  explicit ArrayIterator(const ArrayData& arr)
+  explicit ArrayIterator(const ArrayDataBase& arr)
       : arr(arr),
         offsets(reinterpret_cast<const offset_type*>(arr.buffers[1]->data()) +
                 arr.offset),
@@ -281,15 +281,15 @@ struct ArrayIterator<Type, enable_if_base_binary<Type>> {
 
 template <>
 struct ArrayIterator<FixedSizeBinaryType> {
-  const ArrayData& arr;
+  const ArrayDataBase& arr;
   const char* data;
   const int32_t width;
   int64_t position;
 
-  explicit ArrayIterator(const ArrayData& arr)
+  explicit ArrayIterator(const ArrayDataBase& arr)
       : arr(arr),
         data(reinterpret_cast<const char*>(arr.buffers[1]->data())),
-        width(checked_cast<const FixedSizeBinaryType&>(*arr.type).byte_width()),
+        width(checked_cast<const FixedSizeBinaryType&>(arr.Type()).byte_width()),
         position(arr.offset) {}
 
   util::string_view operator()() {
@@ -309,7 +309,7 @@ struct OutputArrayWriter<Type, enable_if_c_number_or_decimal<Type>> {
   using T = typename TypeTraits<Type>::ScalarType::ValueType;
   T* values;
 
-  explicit OutputArrayWriter(ArrayData* data) : values(data->GetMutableValues<T>(1)) {}
+  explicit OutputArrayWriter(ArrayDataBase* data) : values(data->GetMutableValues<T>(1)) {}
 
   void Write(T value) { *values++ = value; }
 
@@ -402,7 +402,7 @@ struct BoxScalar<Decimal256Type> {
 
 template <typename T, typename VisitFunc, typename NullFunc>
 static typename arrow::internal::call_traits::enable_if_return<VisitFunc, void>::type
-VisitArrayValuesInline(const ArrayData& arr, VisitFunc&& valid_func,
+VisitArrayValuesInline(const ArrayDataBase& arr, VisitFunc&& valid_func,
                        NullFunc&& null_func) {
   VisitArrayDataInline<T>(
       arr,
@@ -414,7 +414,7 @@ VisitArrayValuesInline(const ArrayData& arr, VisitFunc&& valid_func,
 
 template <typename T, typename VisitFunc, typename NullFunc>
 static typename arrow::internal::call_traits::enable_if_return<VisitFunc, Status>::type
-VisitArrayValuesInline(const ArrayData& arr, VisitFunc&& valid_func,
+VisitArrayValuesInline(const ArrayDataBase& arr, VisitFunc&& valid_func,
                        NullFunc&& null_func) {
   return VisitArrayDataInline<T>(
       arr,
@@ -427,7 +427,7 @@ VisitArrayValuesInline(const ArrayData& arr, VisitFunc&& valid_func,
 // Like VisitArrayValuesInline, but for binary functions.
 
 template <typename Arg0Type, typename Arg1Type, typename VisitFunc, typename NullFunc>
-static void VisitTwoArrayValuesInline(const ArrayData& arr0, const ArrayData& arr1,
+static void VisitTwoArrayValuesInline(const ArrayDataBase& arr0, const ArrayDataBase& arr1,
                                       VisitFunc&& valid_func, NullFunc&& null_func) {
   ArrayIterator<Arg0Type> arr0_it(arr0);
   ArrayIterator<Arg1Type> arr1_it(arr1);
@@ -552,7 +552,7 @@ template <typename Type>
 struct OutputAdapter<Type, enable_if_boolean<Type>> {
   template <typename Generator>
   static Status Write(KernelContext*, Datum* out, Generator&& generator) {
-    ArrayData* out_arr = out->mutable_array();
+    ExecArrayData* out_arr = out->mutable_array();
     auto out_bitmap = out_arr->buffers[1]->mutable_data();
     GenerateBitsUnrolled(out_bitmap, out_arr->offset, out_arr->length,
                          std::forward<Generator>(generator));
@@ -566,7 +566,7 @@ struct OutputAdapter<Type, enable_if_c_number_or_decimal<Type>> {
 
   template <typename Generator>
   static Status Write(KernelContext*, Datum* out, Generator&& generator) {
-    ArrayData* out_arr = out->mutable_array();
+    ArrayDataBase* out_arr = out->mutable_array();
     auto out_data = out_arr->GetMutableValues<T>(1);
     // TODO: Is this as fast as a more explicitly inlined function?
     for (int64_t i = 0; i < out_arr->length; ++i) {
@@ -607,7 +607,7 @@ struct ScalarUnary {
   using OutValue = typename GetOutputType<OutType>::T;
   using Arg0Value = typename GetViewType<Arg0Type>::T;
 
-  static Status ExecArray(KernelContext* ctx, const ArrayData& arg0, Datum* out) {
+  static Status ExecArray(KernelContext* ctx, const ExecArrayData& arg0, Datum* out) {
     Status st = Status::OK();
     ArrayIterator<Arg0Type> arg0_it(arg0);
     RETURN_NOT_OK(OutputAdapter<OutType>::Write(ctx, out, [&]() -> OutValue {
@@ -664,10 +664,10 @@ struct ScalarUnaryNotNullStateful {
 
   template <typename Type>
   struct ArrayExec<Type, enable_if_c_number_or_decimal<Type>> {
-    static Status Exec(const ThisType& functor, KernelContext* ctx, const ArrayData& arg0,
+    static Status Exec(const ThisType& functor, KernelContext* ctx, const ArrayDataBase& arg0,
                        Datum* out) {
       Status st = Status::OK();
-      ArrayData* out_arr = out->mutable_array();
+      ArrayDataBase* out_arr = out->mutable_array();
       auto out_data = out_arr->GetMutableValues<OutValue>(1);
       VisitArrayValuesInline<Arg0Type>(
           arg0,
@@ -684,7 +684,7 @@ struct ScalarUnaryNotNullStateful {
 
   template <typename Type>
   struct ArrayExec<Type, enable_if_base_binary<Type>> {
-    static Status Exec(const ThisType& functor, KernelContext* ctx, const ArrayData& arg0,
+    static Status Exec(const ThisType& functor, KernelContext* ctx, const ArrayDataBase& arg0,
                        Datum* out) {
       // NOTE: This code is not currently used by any kernels and has
       // suboptimal performance because it's recomputing the validity bitmap
@@ -696,7 +696,7 @@ struct ScalarUnaryNotNullStateful {
           arg0, [&](Arg0Value v) { return builder.Append(functor.op.Call(ctx, v, &st)); },
           [&]() { return builder.AppendNull(); }));
       if (st.ok()) {
-        std::shared_ptr<ArrayData> result;
+        std::shared_ptr<ExecArrayData> result;
         RETURN_NOT_OK(builder.FinishInternal(&result));
         out->value = std::move(result);
       }
@@ -706,10 +706,10 @@ struct ScalarUnaryNotNullStateful {
 
   template <typename Type>
   struct ArrayExec<Type, enable_if_t<is_boolean_type<Type>::value>> {
-    static Status Exec(const ThisType& functor, KernelContext* ctx, const ArrayData& arg0,
+    static Status Exec(const ThisType& functor, KernelContext* ctx, const ExecArrayData& arg0,
                        Datum* out) {
       Status st = Status::OK();
-      ArrayData* out_arr = out->mutable_array();
+      ExecArrayData* out_arr = out->mutable_array();
       FirstTimeBitmapWriter out_writer(out_arr->buffers[1]->mutable_data(),
                                        out_arr->offset, out_arr->length);
       VisitArrayValuesInline<Arg0Type>(
@@ -790,8 +790,8 @@ struct ScalarBinary {
   using Arg0Value = typename GetViewType<Arg0Type>::T;
   using Arg1Value = typename GetViewType<Arg1Type>::T;
 
-  static Status ArrayArray(KernelContext* ctx, const ArrayData& arg0,
-                           const ArrayData& arg1, Datum* out) {
+  static Status ArrayArray(KernelContext* ctx, const ExecArrayData& arg0,
+                           const ExecArrayData& arg1, Datum* out) {
     Status st = Status::OK();
     ArrayIterator<Arg0Type> arg0_it(arg0);
     ArrayIterator<Arg1Type> arg1_it(arg1);
@@ -802,7 +802,7 @@ struct ScalarBinary {
     return st;
   }
 
-  static Status ArrayScalar(KernelContext* ctx, const ArrayData& arg0, const Scalar& arg1,
+  static Status ArrayScalar(KernelContext* ctx, const ExecArrayData& arg0, const Scalar& arg1,
                             Datum* out) {
     Status st = Status::OK();
     ArrayIterator<Arg0Type> arg0_it(arg0);
@@ -814,7 +814,7 @@ struct ScalarBinary {
     return st;
   }
 
-  static Status ScalarArray(KernelContext* ctx, const Scalar& arg0, const ArrayData& arg1,
+  static Status ScalarArray(KernelContext* ctx, const Scalar& arg0, const ExecArrayData& arg1,
                             Datum* out) {
     Status st = Status::OK();
     auto arg0_val = UnboxScalar<Arg0Type>::Unbox(arg0);
@@ -870,7 +870,7 @@ struct ScalarBinaryNotNullStateful {
 
   // NOTE: In ArrayExec<Type>, Type is really OutputType
 
-  Status ArrayArray(KernelContext* ctx, const ArrayData& arg0, const ArrayData& arg1,
+  Status ArrayArray(KernelContext* ctx, const ExecArrayData& arg0, const ExecArrayData& arg1,
                     Datum* out) {
     Status st = Status::OK();
     OutputArrayWriter<OutType> writer(out->mutable_array());
@@ -883,7 +883,7 @@ struct ScalarBinaryNotNullStateful {
     return st;
   }
 
-  Status ArrayScalar(KernelContext* ctx, const ArrayData& arg0, const Scalar& arg1,
+  Status ArrayScalar(KernelContext* ctx, const ExecArrayData& arg0, const Scalar& arg1,
                      Datum* out) {
     Status st = Status::OK();
     OutputArrayWriter<OutType> writer(out->mutable_array());
@@ -902,7 +902,7 @@ struct ScalarBinaryNotNullStateful {
     return st;
   }
 
-  Status ScalarArray(KernelContext* ctx, const Scalar& arg0, const ArrayData& arg1,
+  Status ScalarArray(KernelContext* ctx, const Scalar& arg0, const ExecArrayData& arg1,
                      Datum* out) {
     Status st = Status::OK();
     OutputArrayWriter<OutType> writer(out->mutable_array());

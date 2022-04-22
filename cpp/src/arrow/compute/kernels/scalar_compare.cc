@@ -369,10 +369,10 @@ struct ScalarMinMax {
       return Status::OK();
     }
 
-    ArrayData* output = out->mutable_array();
+    ExecArrayData* output = out->mutable_array();
 
     // At least one array, two or more arguments
-    ArrayDataVector arrays;
+    std::vector<std::shared_ptr<ExecArrayData>> arrays;
     for (const auto& arg : batch.values) {
       if (!arg.is_array()) continue;
       arrays.push_back(arg.array());
@@ -392,7 +392,7 @@ struct ScalarMinMax {
         // Abort early
         ARROW_ASSIGN_OR_RAISE(auto array, MakeArrayFromScalar(*temp_scalar, batch.length,
                                                               ctx->memory_pool()));
-        *output = *array->data();
+        *output = ExecArrayData(*array->data());
         return Status::OK();
       }
     }
@@ -406,7 +406,7 @@ struct ScalarMinMax {
     if (options.skip_nulls && initialize_output) {
       // OR together the validity buffers of all arrays
       if (std::all_of(arrays.begin(), arrays.end(),
-                      [](const std::shared_ptr<ArrayData>& arr) {
+                      [](const std::shared_ptr<ExecArrayData>& arr) {
                         return arr->MayHaveNulls();
                       })) {
         for (const auto& arr : arrays) {
@@ -595,7 +595,7 @@ struct BinaryScalarMinMax {
         }
       } else {
         DCHECK(datum.is_array());
-        const ArrayData& array = *datum.array();
+        const ExecArrayData& array = *datum.array();
         const auto offsets = array.GetValues<offset_type>(1);
         int64_t estimated_current_size = offsets[array.length] - offsets[0];
         estimated_final_size = std::max(estimated_final_size, estimated_current_size);

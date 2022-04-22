@@ -26,7 +26,8 @@
 namespace arrow {
 
 class DataType;
-struct ArrayData;
+template<typename T> struct TypedArrayData;
+using ArrayData = TypedArrayData<std::shared_ptr<DataType>>;
 struct Datum;
 struct Scalar;
 

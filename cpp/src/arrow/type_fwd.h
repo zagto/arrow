@@ -67,7 +67,9 @@ using DataTypeVector = std::vector<std::shared_ptr<DataType>>;
 using FieldVector = std::vector<std::shared_ptr<Field>>;
 
 class Array;
-struct ArrayData;
+struct ArrayDataBase;
+template<typename T> struct TypedArrayData;
+using ArrayData = TypedArrayData<std::shared_ptr<DataType>>;
 class ArrayBuilder;
 struct Scalar;
 

@@ -369,7 +369,7 @@ struct NullGeneralization {
 // * Otherwise, we allocate the bitmap and populate it
 class NullPropagator {
  public:
-  NullPropagator(KernelContext* ctx, const ExecBatch& batch, ArrayData* output)
+  NullPropagator(KernelContext* ctx, const ExecBatch& batch, ExecArrayData* output)
       : ctx_(ctx), batch_(batch), output_(output) {
     for (const Datum& datum : batch_.values) {
       auto null_generalization = NullGeneralization::Get(datum);
@@ -412,7 +412,7 @@ class NullPropagator {
 
     // Walk all the values with nulls instead of breaking on the first in case
     // we find a bitmap that can be reused in the non-preallocated case
-    for (const ArrayData* arr : arrays_with_nulls_) {
+    for (const ExecArrayData* arr : arrays_with_nulls_) {
       if (arr->null_count.load() == arr->length && arr->buffers[0] != nullptr) {
         // Reuse this all null bitmap
         output_->buffers[0] = arr->buffers[0];
@@ -427,7 +427,7 @@ class NullPropagator {
 
   Status PropagateSingle() {
     // One array
-    const ArrayData& arr = *arrays_with_nulls_[0];
+    const ExecArrayData& arr = *arrays_with_nulls_[0];
     const std::shared_ptr<Buffer>& arr_bitmap = arr.buffers[0];
 
     // Reuse the null count if it's known
@@ -466,7 +466,7 @@ class NullPropagator {
     // Do not compute the intersection null count until it's needed
     RETURN_NOT_OK(EnsureAllocated());
 
-    auto Accumulate = [&](const ArrayData& left, const ArrayData& right) {
+    auto Accumulate = [&](const ExecArrayData& left, const ExecArrayData& right) {
       DCHECK(left.buffers[0]);
       DCHECK(right.buffers[0]);
       BitmapAnd(left.buffers[0]->data(), left.offset, right.buffers[0]->data(),
@@ -528,9 +528,9 @@ class NullPropagator {
  private:
   KernelContext* ctx_;
   const ExecBatch& batch_;
-  std::vector<const ArrayData*> arrays_with_nulls_;
+  std::vector<const ExecArrayData*> arrays_with_nulls_;
   bool is_all_null_ = false;
-  ArrayData* output_;
+  ExecArrayData* output_;
   uint8_t* bitmap_;
   bool bitmap_preallocated_ = false;
 };
@@ -580,8 +580,8 @@ class KernelExecutorImpl : public KernelExecutor {
     return Status::OK();
   }
 
-  Result<std::shared_ptr<ArrayData>> PrepareOutput(int64_t length) {
-    auto out = std::make_shared<ArrayData>(output_descr_.type, length);
+  Result<std::shared_ptr<ExecArrayData>> PrepareOutput(int64_t length) {
+    auto out = std::make_shared<ExecArrayData>(output_descr_.type.get(), length);
     out->buffers.resize(output_num_buffers_);
 
     if (validity_preallocated_) {
@@ -679,7 +679,7 @@ class ScalarExecutor : public KernelExecutorImpl<ScalarKernel> {
     RETURN_NOT_OK(PrepareNextOutput(batch, &out));
 
     if (output_descr_.shape == ValueDescr::ARRAY) {
-      ArrayData* out_arr = out.mutable_array();
+      ExecArrayData* out_arr = out.mutable_array();
       if (output_descr_.type->id() == Type::NA) {
         out_arr->null_count = out_arr->length;
       } else if (kernel_->null_handling == NullHandling::INTERSECTION) {
@@ -823,7 +823,7 @@ class ScalarExecutor : public KernelExecutorImpl<ScalarKernel> {
   bool preallocate_contiguous_ = false;
 
   // For storing a contiguous preallocation per above. Unused otherwise
-  std::shared_ptr<ArrayData> preallocated_;
+  std::shared_ptr<ExecArrayData> preallocated_;
 };
 
 Status PackBatchNoChunks(const std::vector<Datum>& args, ExecBatch* out) {
@@ -1004,7 +1004,7 @@ Result<std::unique_ptr<KernelExecutor>> MakeExecutor(ExecContext* ctx,
 
 }  // namespace
 
-Status PropagateNulls(KernelContext* ctx, const ExecBatch& batch, ArrayData* output) {
+Status PropagateNulls(KernelContext* ctx, const ExecBatch& batch, ExecArrayData* output) {
   DCHECK_NE(nullptr, output);
   DCHECK_GT(output->buffers.size(), 0);
 

@@ -54,8 +54,8 @@ struct CastPrimitive {
 
     StaticCastFunc caster = DoStaticCast<OutT, InT>;
     if (input.kind() == Datum::ARRAY) {
-      const ArrayData& arr = *input.array();
-      ArrayData* out_arr = out->mutable_array();
+      const ArrayDataBase& arr = *input.array();
+      ArrayDataBase* out_arr = out->mutable_array();
       caster(arr.buffers[1]->data(), arr.offset, arr.length, out_arr->offset,
              out_arr->buffers[1]->mutable_data());
     } else {
@@ -76,8 +76,8 @@ struct CastPrimitive<OutType, InType, enable_if_t<std::is_same<OutType, InType>:
     using T = typename InType::c_type;
 
     if (input.kind() == Datum::ARRAY) {
-      const ArrayData& arr = *input.array();
-      ArrayData* out_arr = out->mutable_array();
+      const ArrayDataBase& arr = *input.array();
+      ArrayDataBase* out_arr = out->mutable_array();
       std::memcpy(
           reinterpret_cast<T*>(out_arr->buffers[1]->mutable_data()) + out_arr->offset,
           reinterpret_cast<const T*>(arr.buffers[1]->data()) + arr.offset,
@@ -157,7 +157,7 @@ void CastNumberToNumberUnsafe(Type::type in_type, Type::type out_type, const Dat
 Status UnpackDictionary(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
   DCHECK(out->is_array());
 
-  DictionaryArray dict_arr(batch[0].array());
+  DictionaryArray dict_arr(batch[0].array()->ToArrayData());
   const CastOptions& options = checked_cast<const CastState&>(*ctx->state()).options;
 
   const auto& dict_type = *dict_arr.dictionary()->type();
@@ -180,7 +180,7 @@ Status OutputAllNull(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
   if (out->is_scalar()) {
     out->scalar()->is_valid = false;
   } else {
-    ArrayData* output = out->mutable_array();
+    ExecArrayData* output = out->mutable_array();
     output->buffers = {nullptr};
     output->null_count = batch.length;
   }
@@ -204,7 +204,7 @@ Status CastFromExtension(KernelContext* ctx, const ExecBatch& batch, Datum* out)
     }
   } else {
     DCHECK_EQ(batch[0].kind(), Datum::ARRAY);
-    ExtensionArray extension(batch[0].array());
+    ExtensionArray extension(batch[0].array()->ToArrayData());
     return Cast(*extension.storage(), out->type(), options, ctx->exec_context())
         .Value(out);
   }
@@ -212,10 +212,10 @@ Status CastFromExtension(KernelContext* ctx, const ExecBatch& batch, Datum* out)
 
 Status CastFromNull(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
   if (!batch[0].is_scalar()) {
-    ArrayData* output = out->mutable_array();
+    ExecArrayData* output = out->mutable_array();
     std::shared_ptr<Array> nulls;
-    RETURN_NOT_OK(MakeArrayOfNull(output->type, batch.length).Value(&nulls));
-    out->value = nulls->data();
+    RETURN_NOT_OK(MakeArrayOfNull(output->type->Clone(), batch.length).Value(&nulls));
+    out->value = std::make_shared<ExecArrayData>(*nulls->data());
   }
   return Status::OK();
 }
@@ -241,8 +241,8 @@ Status ZeroCopyCastExec(KernelContext* ctx, const ExecBatch& batch, Datum* out) 
   DCHECK_EQ(batch[0].kind(), Datum::ARRAY);
   // Make a copy of the buffers into a destination array without carrying
   // the type
-  const ArrayData& input = *batch[0].array();
-  ArrayData* output = out->mutable_array();
+  const ExecArrayData& input = *batch[0].array();
+  ExecArrayData* output = out->mutable_array();
   output->length = input.length;
   output->SetNullCount(input.null_count);
   output->buffers = input.buffers;

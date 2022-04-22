@@ -41,7 +41,7 @@ constexpr int64_t kMillisecondsInDay = 86400000;
 
 template <typename in_type, typename out_type>
 Status ShiftTime(KernelContext* ctx, const util::DivideOrMultiply factor_op,
-                 const int64_t factor, const ArrayData& input, ArrayData* output) {
+                 const int64_t factor, const ExecArrayData& input, ExecArrayData* output) {
   const CastOptions& options = checked_cast<const CastState&>(*ctx->state()).options;
   auto in_data = input.GetValues<in_type>(1);
   auto out_data = output->GetMutableValues<out_type>(1);
@@ -149,8 +149,8 @@ struct CastFunctor<
   static Status Exec(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
     DCHECK_EQ(batch[0].kind(), Datum::ARRAY);
 
-    const ArrayData& input = *batch[0].array();
-    ArrayData* output = out->mutable_array();
+    const ExecArrayData& input = *batch[0].array();
+    ExecArrayData* output = out->mutable_array();
 
     // If units are the same, zero copy, otherwise convert
     const auto& in_type = checked_cast<const I&>(*batch[0].type());
@@ -348,8 +348,8 @@ struct CastFunctor<O, I, enable_if_t<is_time_type<I>::value && is_time_type<O>::
   static Status Exec(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
     DCHECK_EQ(batch[0].kind(), Datum::ARRAY);
 
-    const ArrayData& input = *batch[0].array();
-    ArrayData* output = out->mutable_array();
+    const ExecArrayData& input = *batch[0].array();
+    ExecArrayData* output = out->mutable_array();
 
     // If units are the same, zero copy, otherwise convert
     const auto& in_type = checked_cast<const I&>(*input.type);

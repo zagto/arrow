@@ -32,7 +32,7 @@ namespace util {
 ///       byte size of the entire buffer.
 /// Note: If a buffer is referenced multiple times then it will
 ///       only be counted once.
-int64_t ARROW_EXPORT TotalBufferSize(const ArrayData& array_data);
+int64_t ARROW_EXPORT TotalBufferSize(const ArrayDataBase& array_data);
 /// \brief The sum of bytes in each buffer referenced by the array
 /// \see TotalBufferSize(const ArrayData& array_data) for details
 int64_t ARROW_EXPORT TotalBufferSize(const Array& array);

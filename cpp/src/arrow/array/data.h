@@ -70,99 +70,14 @@ constexpr int64_t kUnknownNullCount = -1;
 /// As another example a function may consume one or more memory buffers in an
 /// input array and replace them with newly-allocated data, changing the output
 /// data type as well.
-struct ARROW_EXPORT ArrayData {
-  ArrayData() = default;
+struct ARROW_EXPORT ArrayDataBase {
+  ArrayDataBase() = default;
+protected:
 
-  ArrayData(std::shared_ptr<DataType> type, int64_t length,
-            int64_t null_count = kUnknownNullCount, int64_t offset = 0)
-      : type(std::move(type)), length(length), null_count(null_count), offset(offset) {}
+  ArrayDataBase(int64_t length, int64_t null_count, int64_t offset)
+    : length(length), null_count(null_count), offset(offset) {}
 
-  ArrayData(std::shared_ptr<DataType> type, int64_t length,
-            std::vector<std::shared_ptr<Buffer>> buffers,
-            int64_t null_count = kUnknownNullCount, int64_t offset = 0)
-      : ArrayData(std::move(type), length, null_count, offset) {
-    this->buffers = std::move(buffers);
-  }
-
-  ArrayData(std::shared_ptr<DataType> type, int64_t length,
-            std::vector<std::shared_ptr<Buffer>> buffers,
-            std::vector<std::shared_ptr<ArrayData>> child_data,
-            int64_t null_count = kUnknownNullCount, int64_t offset = 0)
-      : ArrayData(std::move(type), length, null_count, offset) {
-    this->buffers = std::move(buffers);
-    this->child_data = std::move(child_data);
-  }
-
-  static std::shared_ptr<ArrayData> Make(std::shared_ptr<DataType> type, int64_t length,
-                                         std::vector<std::shared_ptr<Buffer>> buffers,
-                                         int64_t null_count = kUnknownNullCount,
-                                         int64_t offset = 0);
-
-  static std::shared_ptr<ArrayData> Make(
-      std::shared_ptr<DataType> type, int64_t length,
-      std::vector<std::shared_ptr<Buffer>> buffers,
-      std::vector<std::shared_ptr<ArrayData>> child_data,
-      int64_t null_count = kUnknownNullCount, int64_t offset = 0);
-
-  static std::shared_ptr<ArrayData> Make(
-      std::shared_ptr<DataType> type, int64_t length,
-      std::vector<std::shared_ptr<Buffer>> buffers,
-      std::vector<std::shared_ptr<ArrayData>> child_data,
-      std::shared_ptr<ArrayData> dictionary, int64_t null_count = kUnknownNullCount,
-      int64_t offset = 0);
-
-  static std::shared_ptr<ArrayData> Make(std::shared_ptr<DataType> type, int64_t length,
-                                         int64_t null_count = kUnknownNullCount,
-                                         int64_t offset = 0);
-
-  // Move constructor
-  ArrayData(ArrayData&& other) noexcept
-      : type(std::move(other.type)),
-        length(other.length),
-        offset(other.offset),
-        buffers(std::move(other.buffers)),
-        child_data(std::move(other.child_data)),
-        dictionary(std::move(other.dictionary)) {
-    SetNullCount(other.null_count);
-  }
-
-  // Copy constructor
-  ArrayData(const ArrayData& other) noexcept
-      : type(other.type),
-        length(other.length),
-        offset(other.offset),
-        buffers(other.buffers),
-        child_data(other.child_data),
-        dictionary(other.dictionary) {
-    SetNullCount(other.null_count);
-  }
-
-  // Move assignment
-  ArrayData& operator=(ArrayData&& other) {
-    type = std::move(other.type);
-    length = other.length;
-    SetNullCount(other.null_count);
-    offset = other.offset;
-    buffers = std::move(other.buffers);
-    child_data = std::move(other.child_data);
-    dictionary = std::move(other.dictionary);
-    return *this;
-  }
-
-  // Copy assignment
-  ArrayData& operator=(const ArrayData& other) {
-    type = other.type;
-    length = other.length;
-    SetNullCount(other.null_count);
-    offset = other.offset;
-    buffers = other.buffers;
-    child_data = other.child_data;
-    dictionary = other.dictionary;
-    return *this;
-  }
-
-  std::shared_ptr<ArrayData> Copy() const { return std::make_shared<ArrayData>(*this); }
-
+  public:
   // Access a buffer's data as a typed C pointer
   template <typename T>
   inline const T* GetValues(int i, int64_t absolute_offset) const {
@@ -173,6 +88,50 @@ struct ARROW_EXPORT ArrayData {
     }
   }
 
+  // Move constructor
+  ArrayDataBase(ArrayDataBase&& other) noexcept
+      : length(other.length),
+        offset(other.offset),
+        buffers(std::move(other.buffers)),
+        child_data(std::move(other.child_data)),
+        dictionary(std::move(other.dictionary)) {
+    SetNullCount(other.null_count);
+  }
+
+  // Copy constructor
+  ArrayDataBase(const ArrayDataBase& other) noexcept
+      : length(other.length),
+        offset(other.offset),
+        buffers(other.buffers),
+        child_data(other.child_data),
+        dictionary(other.dictionary) {
+    SetNullCount(other.null_count);
+  }
+
+  // Move assignment
+  ArrayDataBase& operator=(ArrayDataBase&& other) {
+    length = other.length;
+    SetNullCount(other.null_count);
+    offset = other.offset;
+    buffers = std::move(other.buffers);
+    child_data = std::move(other.child_data);
+    dictionary = std::move(other.dictionary);
+    return *this;
+  }
+
+  // Copy assignment
+  ArrayDataBase& operator=(const ArrayDataBase& other) {
+    length = other.length;
+    SetNullCount(other.null_count);
+    offset = other.offset;
+    buffers = other.buffers;
+    child_data = other.child_data;
+    dictionary = other.dictionary;
+    return *this;
+  }
+
+
+public:
   template <typename T>
   inline const T* GetValues(int i) const {
     return GetValues<T>(i, offset);
@@ -209,15 +168,6 @@ struct ARROW_EXPORT ArrayData {
     return GetMutableValues<T>(i, offset);
   }
 
-  /// \brief Construct a zero-copy slice of the data with the given offset and length
-  std::shared_ptr<ArrayData> Slice(int64_t offset, int64_t length) const;
-
-  /// \brief Input-checking variant of Slice
-  ///
-  /// An Invalid Status is returned if the requested slice falls out of bounds.
-  /// Note that unlike Slice, `length` isn't clamped to the available buffer size.
-  Result<std::shared_ptr<ArrayData>> SliceSafe(int64_t offset, int64_t length) const;
-
   void SetNullCount(int64_t v) { null_count.store(v); }
 
   /// \brief Return null count, or compute and set it if it's not known
@@ -229,7 +179,8 @@ struct ARROW_EXPORT ArrayData {
     return null_count.load() != 0 && buffers[0] != NULLPTR;
   }
 
-  std::shared_ptr<DataType> type;
+  virtual DataType &Type() const = 0;
+
   int64_t length = 0;
   mutable std::atomic<int64_t> null_count{0};
   // The logical start point into the physical buffers (in values, not bytes).
@@ -240,6 +191,114 @@ struct ARROW_EXPORT ArrayData {
 
   // The dictionary for this Array, if any. Only used for dictionary type
   std::shared_ptr<ArrayData> dictionary;
+};
+
+template<typename TypeReference>
+struct ARROW_EXPORT TypedArrayData : public ArrayDataBase {
+  //TypedArrayData() = default;
+  using ArrayDataBase::ArrayDataBase;
+
+  TypedArrayData(TypeReference type, int64_t length,
+            int64_t null_count = kUnknownNullCount, int64_t offset = 0)
+      : ArrayDataBase(length, null_count, offset), type(std::move(type)) {}
+
+  TypedArrayData(TypeReference type, int64_t length,
+            std::vector<std::shared_ptr<Buffer>> buffers,
+            int64_t null_count = kUnknownNullCount, int64_t offset = 0)
+      : TypedArrayData(std::move(type), length, null_count, offset) {
+    this->buffers = std::move(buffers);
+  }
+
+  TypedArrayData(TypeReference type, int64_t length,
+            std::vector<std::shared_ptr<Buffer>> buffers,
+            std::vector<std::shared_ptr<ArrayData>> child_data,
+            int64_t null_count = kUnknownNullCount, int64_t offset = 0)
+      : TypedArrayData(std::move(type), length, null_count, offset) {
+    this->buffers = std::move(buffers);
+    this->child_data = std::move(child_data);
+  }
+
+  // Move constructor
+  TypedArrayData(TypedArrayData&& other) noexcept
+      : ArrayDataBase(std::forward<TypedArrayData&&>(other)),
+        type(std::move(other.type)) {}
+
+  // Copy constructor
+  TypedArrayData(const TypedArrayData& other) noexcept
+      : ArrayDataBase(other),
+        type(other.type) {}
+
+  // Move assignment
+  TypedArrayData& operator=(TypedArrayData&& other) {
+    type = std::move(other.type);
+    *static_cast<ArrayDataBase *>(this) = std::forward<TypedArrayData&&>(other);
+    return *this;
+  }
+
+  // Copy assignment
+  TypedArrayData& operator=(const TypedArrayData& other) {
+    type = other.type;
+    *static_cast<ArrayDataBase *>(this) = other;
+    return *this;
+  }
+
+
+  static std::shared_ptr<TypedArrayData<TypeReference>> Make(TypeReference type, int64_t length,
+                                         std::vector<std::shared_ptr<Buffer>> buffers,
+                                         int64_t null_count = kUnknownNullCount,
+                                         int64_t offset = 0);
+
+  static std::shared_ptr<TypedArrayData> Make(
+      TypeReference type, int64_t length,
+      std::vector<std::shared_ptr<Buffer>> buffers,
+      std::vector<std::shared_ptr<ArrayData>> child_data,
+      int64_t null_count = kUnknownNullCount, int64_t offset = 0);
+
+  static std::shared_ptr<TypedArrayData> Make(
+      TypeReference type, int64_t length,
+      std::vector<std::shared_ptr<Buffer>> buffers,
+      std::vector<std::shared_ptr<ArrayData>> child_data,
+      std::shared_ptr<ArrayData> dictionary, int64_t null_count = kUnknownNullCount,
+      int64_t offset = 0);
+
+  static std::shared_ptr<TypedArrayData> Make(TypeReference type, int64_t length,
+                                         int64_t null_count = kUnknownNullCount,
+                                         int64_t offset = 0);
+
+
+
+  std::shared_ptr<TypedArrayData> Copy() const { return std::make_shared<TypedArrayData>(*this); }
+
+  /// \brief Construct a zero-copy slice of the data with the given offset and length
+  std::shared_ptr<TypedArrayData> Slice(int64_t offset, int64_t length) const;
+
+  /// \brief Input-checking variant of Slice
+  ///
+  /// An Invalid Status is returned if the requested slice falls out of bounds.
+  /// Note that unlike Slice, `length` isn't clamped to the available buffer size.
+  Result<std::shared_ptr<TypedArrayData>> SliceSafe(int64_t offset, int64_t length) const;
+
+  virtual DataType &Type() const { return *type; };
+
+  TypeReference type;
+};
+
+template struct TypedArrayData<std::shared_ptr<DataType>>;
+template struct TypedArrayData<DataType *>;
+using ArrayData = TypedArrayData<std::shared_ptr<DataType>>;
+//using ExecArrayData = TypedArrayData<std::shared_ptr<DataType>>;
+
+class ExecArrayData : public TypedArrayData<DataType *> {
+public:
+  using TypedArrayData::TypedArrayData;
+  explicit ExecArrayData(ArrayData &regular) {
+    type = regular.type.get();
+    *static_cast<ArrayDataBase *>(this) = regular;
+  }
+
+  std::shared_ptr<ExecArrayData> Slice(int64_t offset, int64_t length) const;
+
+  std::shared_ptr<ArrayData> ToArrayData();
 };
 
 namespace internal {

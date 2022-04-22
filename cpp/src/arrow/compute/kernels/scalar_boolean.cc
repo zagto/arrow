@@ -31,8 +31,8 @@ namespace compute {
 namespace {
 
 template <typename ComputeWord>
-void ComputeKleene(ComputeWord&& compute_word, KernelContext* ctx, const ArrayData& left,
-                   const ArrayData& right, ArrayData* out) {
+void ComputeKleene(ComputeWord&& compute_word, KernelContext* ctx, const ExecArrayData& left,
+                   const ExecArrayData& right, ExecArrayData* out) {
   DCHECK(left.null_count != 0 || right.null_count != 0)
       << "ComputeKleene is unnecessarily expensive for the non-null case";
 
@@ -91,7 +91,7 @@ inline BooleanScalar InvertScalar(const Scalar& in) {
                      : BooleanScalar();
 }
 
-inline Bitmap GetBitmap(const ArrayData& arr, int index) {
+inline Bitmap GetBitmap(const ExecArrayData& arr, int index) {
   return Bitmap{arr.buffers[index], arr.offset, arr.length};
 }
 
@@ -101,7 +101,7 @@ struct InvertOp {
     return Status::OK();
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& in, ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ExecArrayData& in, ExecArrayData* out) {
     GetBitmap(*out, 1).CopyFromInverted(GetBitmap(in, 1));
     return Status::OK();
   }
@@ -109,8 +109,8 @@ struct InvertOp {
 
 template <typename Op>
 struct Commutative {
-  static Status Call(KernelContext* ctx, const Scalar& left, const ArrayData& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const Scalar& left, const ExecArrayData& right,
+                     ExecArrayData* out) {
     return Op::Call(ctx, right, left, out);
   }
 };
@@ -128,8 +128,8 @@ struct AndOp : Commutative<AndOp> {
     return Status::OK();
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& left, const Scalar& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ExecArrayData& left, const Scalar& right,
+                     ExecArrayData* out) {
     if (right.is_valid) {
       checked_cast<const BooleanScalar&>(right).value
           ? GetBitmap(*out, 1).CopyFrom(GetBitmap(left, 1))
@@ -138,8 +138,8 @@ struct AndOp : Commutative<AndOp> {
     return Status::OK();
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& left, const ArrayData& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ExecArrayData& left, const ExecArrayData& right,
+                     ExecArrayData* out) {
     ::arrow::internal::BitmapAnd(left.buffers[1]->data(), left.offset,
                                  right.buffers[1]->data(), right.offset, right.length,
                                  out->offset, out->buffers[1]->mutable_data());
@@ -163,8 +163,8 @@ struct KleeneAndOp : Commutative<KleeneAndOp> {
     return Status::OK();
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& left, const Scalar& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ExecArrayData& left, const Scalar& right,
+                     ExecArrayData* out) {
     bool right_true = right.is_valid && checked_cast<const BooleanScalar&>(right).value;
     bool right_false = right.is_valid && !checked_cast<const BooleanScalar&>(right).value;
 
@@ -200,8 +200,8 @@ struct KleeneAndOp : Commutative<KleeneAndOp> {
     return Status::OK();
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& left, const ArrayData& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ExecArrayData& left, const ExecArrayData& right,
+                     ExecArrayData* out) {
     if (left.GetNullCount() == 0 && right.GetNullCount() == 0) {
       out->null_count = 0;
       return AndOp::Call(ctx, left, right, out);
@@ -232,8 +232,8 @@ struct OrOp : Commutative<OrOp> {
     return Status::OK();
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& left, const Scalar& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ExecArrayData& left, const Scalar& right,
+                     ExecArrayData* out) {
     if (right.is_valid) {
       checked_cast<const BooleanScalar&>(right).value
           ? GetBitmap(*out, 1).SetBitsTo(true)
@@ -242,8 +242,8 @@ struct OrOp : Commutative<OrOp> {
     return Status::OK();
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& left, const ArrayData& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ExecArrayData& left, const ExecArrayData& right,
+                     ExecArrayData* out) {
     ::arrow::internal::BitmapOr(left.buffers[1]->data(), left.offset,
                                 right.buffers[1]->data(), right.offset, right.length,
                                 out->offset, out->buffers[1]->mutable_data());
@@ -267,8 +267,8 @@ struct KleeneOrOp : Commutative<KleeneOrOp> {
     return Status::OK();
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& left, const Scalar& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ExecArrayData& left, const Scalar& right,
+                     ExecArrayData* out) {
     bool right_true = right.is_valid && checked_cast<const BooleanScalar&>(right).value;
     bool right_false = right.is_valid && !checked_cast<const BooleanScalar&>(right).value;
 
@@ -304,8 +304,8 @@ struct KleeneOrOp : Commutative<KleeneOrOp> {
     return Status::OK();
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& left, const ArrayData& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ExecArrayData& left, const ExecArrayData& right,
+                     ExecArrayData* out) {
     if (left.GetNullCount() == 0 && right.GetNullCount() == 0) {
       out->null_count = 0;
       return OrOp::Call(ctx, left, right, out);
@@ -337,8 +337,8 @@ struct XorOp : Commutative<XorOp> {
     return Status::OK();
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& left, const Scalar& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ExecArrayData& left, const Scalar& right,
+                     ExecArrayData* out) {
     if (right.is_valid) {
       checked_cast<const BooleanScalar&>(right).value
           ? GetBitmap(*out, 1).CopyFromInverted(GetBitmap(left, 1))
@@ -347,8 +347,8 @@ struct XorOp : Commutative<XorOp> {
     return Status::OK();
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& left, const ArrayData& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ExecArrayData& left, const ExecArrayData& right,
+                     ExecArrayData* out) {
     ::arrow::internal::BitmapXor(left.buffers[1]->data(), left.offset,
                                  right.buffers[1]->data(), right.offset, right.length,
                                  out->offset, out->buffers[1]->mutable_data());
@@ -362,8 +362,8 @@ struct AndNotOp {
     return AndOp::Call(ctx, left, InvertScalar(right), out);
   }
 
-  static Status Call(KernelContext* ctx, const Scalar& left, const ArrayData& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const Scalar& left, const ExecArrayData& right,
+                     ExecArrayData* out) {
     if (left.is_valid) {
       checked_cast<const BooleanScalar&>(left).value
           ? GetBitmap(*out, 1).CopyFromInverted(GetBitmap(right, 1))
@@ -372,13 +372,13 @@ struct AndNotOp {
     return Status::OK();
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& left, const Scalar& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ExecArrayData& left, const Scalar& right,
+                     ExecArrayData* out) {
     return AndOp::Call(ctx, left, InvertScalar(right), out);
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& left, const ArrayData& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ExecArrayData& left, const ExecArrayData& right,
+                     ExecArrayData* out) {
     ::arrow::internal::BitmapAndNot(left.buffers[1]->data(), left.offset,
                                     right.buffers[1]->data(), right.offset, right.length,
                                     out->offset, out->buffers[1]->mutable_data());
@@ -392,8 +392,8 @@ struct KleeneAndNotOp {
     return KleeneAndOp::Call(ctx, left, InvertScalar(right), out);
   }
 
-  static Status Call(KernelContext* ctx, const Scalar& left, const ArrayData& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const Scalar& left, const ExecArrayData& right,
+                     ExecArrayData* out) {
     bool left_true = left.is_valid && checked_cast<const BooleanScalar&>(left).value;
     bool left_false = left.is_valid && !checked_cast<const BooleanScalar&>(left).value;
 
@@ -429,13 +429,13 @@ struct KleeneAndNotOp {
     return Status::OK();
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& left, const Scalar& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ExecArrayData& left, const Scalar& right,
+                     ExecArrayData* out) {
     return KleeneAndOp::Call(ctx, left, InvertScalar(right), out);
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& left, const ArrayData& right,
-                     ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ExecArrayData& left, const ExecArrayData& right,
+                     ExecArrayData* out) {
     if (left.GetNullCount() == 0 && right.GetNullCount() == 0) {
       out->null_count = 0;
       return AndNotOp::Call(ctx, left, right, out);

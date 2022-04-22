@@ -56,42 +56,48 @@ static inline void AdjustNonNullable(Type::type type_id, int64_t length,
   }
 }
 
-std::shared_ptr<ArrayData> ArrayData::Make(std::shared_ptr<DataType> type, int64_t length,
+template <typename TypeReference>
+std::shared_ptr<TypedArrayData<TypeReference>> TypedArrayData<TypeReference>::Make(TypeReference type, int64_t length,
                                            std::vector<std::shared_ptr<Buffer>> buffers,
                                            int64_t null_count, int64_t offset) {
   AdjustNonNullable(type->id(), length, &buffers, &null_count);
-  return std::make_shared<ArrayData>(std::move(type), length, std::move(buffers),
+  return std::make_shared<TypedArrayData<TypeReference>>(std::move(type), length, std::move(buffers),
                                      null_count, offset);
 }
 
-std::shared_ptr<ArrayData> ArrayData::Make(
-    std::shared_ptr<DataType> type, int64_t length,
+template <typename TypeReference>
+std::shared_ptr<TypedArrayData<TypeReference>> TypedArrayData<TypeReference>::Make(
+    TypeReference type, int64_t length,
     std::vector<std::shared_ptr<Buffer>> buffers,
     std::vector<std::shared_ptr<ArrayData>> child_data, int64_t null_count,
     int64_t offset) {
   AdjustNonNullable(type->id(), length, &buffers, &null_count);
-  return std::make_shared<ArrayData>(std::move(type), length, std::move(buffers),
+  return std::make_shared<TypedArrayData<TypeReference>>(std::move(type), length, std::move(buffers),
                                      std::move(child_data), null_count, offset);
 }
 
-std::shared_ptr<ArrayData> ArrayData::Make(
-    std::shared_ptr<DataType> type, int64_t length,
+template <typename TypeReference>
+std::shared_ptr<TypedArrayData<TypeReference>> TypedArrayData<TypeReference>::Make(
+    TypeReference type, int64_t length,
     std::vector<std::shared_ptr<Buffer>> buffers,
     std::vector<std::shared_ptr<ArrayData>> child_data,
     std::shared_ptr<ArrayData> dictionary, int64_t null_count, int64_t offset) {
   AdjustNonNullable(type->id(), length, &buffers, &null_count);
-  auto data = std::make_shared<ArrayData>(std::move(type), length, std::move(buffers),
+  auto data = std::make_shared<TypedArrayData<TypeReference>>(std::move(type), length, std::move(buffers),
                                           std::move(child_data), null_count, offset);
   data->dictionary = std::move(dictionary);
   return data;
 }
 
-std::shared_ptr<ArrayData> ArrayData::Make(std::shared_ptr<DataType> type, int64_t length,
+template <typename TypeReference>
+std::shared_ptr<TypedArrayData<TypeReference>> TypedArrayData<TypeReference>::Make(
+    TypeReference type, int64_t length,
                                            int64_t null_count, int64_t offset) {
-  return std::make_shared<ArrayData>(std::move(type), length, null_count, offset);
+  return std::make_shared<TypedArrayData<TypeReference>>(std::move(type), length, null_count, offset);
 }
 
-std::shared_ptr<ArrayData> ArrayData::Slice(int64_t off, int64_t len) const {
+template <typename TypeReference>
+std::shared_ptr<TypedArrayData<TypeReference>> TypedArrayData<TypeReference>::Slice(int64_t off, int64_t len) const {
   ARROW_CHECK_LE(off, length) << "Slice offset greater than array length";
   len = std::min(length - off, len);
   off += offset;
@@ -109,12 +115,32 @@ std::shared_ptr<ArrayData> ArrayData::Slice(int64_t off, int64_t len) const {
   return copy;
 }
 
-Result<std::shared_ptr<ArrayData>> ArrayData::SliceSafe(int64_t off, int64_t len) const {
+std::shared_ptr<ExecArrayData> ExecArrayData::Slice(int64_t off, int64_t len) const {
+  ARROW_CHECK_LE(off, length) << "Slice offset greater than array length";
+  len = std::min(length - off, len);
+  off += offset;
+
+  auto copy = std::dynamic_pointer_cast<ExecArrayData>(this->Copy());
+  copy->length = len;
+  copy->offset = off;
+  if (null_count == length) {
+    copy->null_count = len;
+  } else if (off == offset && len == length) {  // A copy of current.
+    copy->null_count = null_count.load();
+  } else {
+    copy->null_count = null_count != 0 ? kUnknownNullCount : 0;
+  }
+  return copy;
+}
+
+
+template <typename TypeReference>
+Result<std::shared_ptr<TypedArrayData<TypeReference>>> TypedArrayData<TypeReference>::SliceSafe(int64_t off, int64_t len) const {
   RETURN_NOT_OK(internal::CheckSliceParams(length, off, len, "array"));
   return Slice(off, len);
 }
 
-int64_t ArrayData::GetNullCount() const {
+int64_t ArrayDataBase::GetNullCount() const {
   int64_t precomputed = this->null_count.load();
   if (ARROW_PREDICT_FALSE(precomputed == kUnknownNullCount)) {
     if (this->buffers[0]) {
@@ -127,6 +153,11 @@ int64_t ArrayData::GetNullCount() const {
   }
   return precomputed;
 }
+
+std::shared_ptr<ArrayData> ExecArrayData::ToArrayData() {
+  return std::make_shared<ArrayData>(type->Clone(), length, buffers, child_data, null_count, offset);
+}
+
 
 // ----------------------------------------------------------------------
 // Implement ArrayData::View

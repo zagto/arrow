@@ -42,13 +42,13 @@ namespace {
 
 template <typename SrcType, typename DestType>
 typename std::enable_if<SrcType::type_id == DestType::type_id, Status>::type
-CastListOffsets(KernelContext* ctx, const ArrayData& in_array, ArrayData* out_array) {
+CastListOffsets(KernelContext* ctx, const ArrayDataBase& in_array, ArrayDataBase* out_array) {
   return Status::OK();
 }
 
 template <typename SrcType, typename DestType>
 typename std::enable_if<SrcType::type_id != DestType::type_id, Status>::type
-CastListOffsets(KernelContext* ctx, const ArrayData& in_array, ArrayData* out_array) {
+CastListOffsets(KernelContext* ctx, const ArrayDataBase& in_array, ArrayDataBase* out_array) {
   using src_offset_type = typename SrcType::offset_type;
   using dest_offset_type = typename DestType::offset_type;
 
@@ -88,11 +88,11 @@ struct CastList {
       return Status::OK();
     }
 
-    const ArrayData& in_array = *batch[0].array();
+    const ArrayDataBase& in_array = *batch[0].array();
     auto offsets = in_array.GetValues<src_offset_type>(1);
     Datum values = in_array.child_data[0];
 
-    ArrayData* out_array = out->mutable_array();
+    ArrayDataBase* out_array = out->mutable_array();
     out_array->buffers = in_array.buffers;
 
     // Shift bitmap in case the source offset is non-zero
@@ -111,8 +111,8 @@ struct CastList {
     // - otherwise, we simply keep the original list offsets
     if (is_downcast) {
       if (offsets[in_array.length] > std::numeric_limits<dest_offset_type>::max()) {
-        return Status::Invalid("Array of type ", in_array.type->ToString(),
-                               " too large to convert to ", out_array->type->ToString());
+        return Status::Invalid("Array of type ", in_array.Type().ToString(),
+                               " too large to convert to ", out_array->Type().ToString());
       }
     }
 
@@ -135,7 +135,7 @@ struct CastList {
                           Cast(values, child_type, options, ctx->exec_context()));
 
     DCHECK_EQ(Datum::ARRAY, cast_values.kind());
-    out_array->child_data.push_back(cast_values.array());
+    out_array->child_data.push_back(cast_values.array()->ToArrayData());
     return Status::OK();
   }
 };
@@ -195,8 +195,8 @@ struct CastStruct {
       return Status::OK();
     }
 
-    const ArrayData& in_array = *batch[0].array();
-    ArrayData* out_array = out->mutable_array();
+    const ExecArrayData& in_array = *batch[0].array();
+    ExecArrayData* out_array = out->mutable_array();
 
     if (in_array.buffers[0]) {
       ARROW_ASSIGN_OR_RAISE(out_array->buffers[0],
@@ -212,7 +212,7 @@ struct CastStruct {
                             Cast(values, target_type, options, ctx->exec_context()));
 
       DCHECK_EQ(Datum::ARRAY, cast_values.kind());
-      out_array->child_data.push_back(cast_values.array());
+      out_array->child_data.push_back(cast_values.array()->ToArrayData());
     }
 
     return Status::OK();

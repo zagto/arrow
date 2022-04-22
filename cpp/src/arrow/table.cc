@@ -47,7 +47,8 @@ using internal::checked_cast;
 
 class KeyValueMetadata;
 class MemoryPool;
-struct ArrayData;
+template<typename T> struct TypedArrayData;
+using ArrayData = TypedArrayData<std::shared_ptr<DataType>>;
 
 // ----------------------------------------------------------------------
 // Table methods

@@ -38,6 +38,15 @@ namespace arrow {
 
 namespace compute {
 
+class ARROW_EXPORT TypeRegistry {
+  std::vector<std::shared_ptr<DataType>> types;
+
+public:
+  void add(std::shared_ptr<DataType> type) {
+    types.push_back(std::move(type));
+  }
+};
+
 class ARROW_EXPORT ExecPlan : public std::enable_shared_from_this<ExecPlan> {
  public:
   using NodeVector = std::vector<ExecNode*>;
@@ -92,8 +101,13 @@ class ARROW_EXPORT ExecPlan : public std::enable_shared_from_this<ExecPlan> {
 
   std::string ToString() const;
 
+  void RegisterDataType(std::shared_ptr<DataType> type) {
+    type_registry_.add(type);
+  }
+
  protected:
   ExecContext* exec_context_;
+  TypeRegistry type_registry_;
   explicit ExecPlan(ExecContext* exec_context) : exec_context_(exec_context) {}
 };
 

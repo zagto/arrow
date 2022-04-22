@@ -61,7 +61,7 @@ struct TDigestImpl : public ScalarAggregator {
       return Status::OK();
     }
     if (batch[0].is_array()) {
-      const ArrayData& data = *batch[0].array();
+      const ExecArrayData& data = *batch[0].array();
       const CType* values = data.GetValues<CType>(1);
 
       if (data.length > data.GetNullCount()) {

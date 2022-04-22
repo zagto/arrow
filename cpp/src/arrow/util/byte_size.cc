@@ -38,7 +38,7 @@ namespace util {
 
 namespace {
 
-int64_t DoTotalBufferSize(const ArrayData& array_data,
+int64_t DoTotalBufferSize(const ArrayDataBase& array_data,
                           std::unordered_set<const uint8_t*>* seen_buffers) {
   int64_t sum = 0;
   for (const auto& buffer : array_data.buffers) {
@@ -89,7 +89,7 @@ int64_t DoTotalBufferSize(const Table& table,
 
 }  // namespace
 
-int64_t TotalBufferSize(const ArrayData& array_data) {
+int64_t TotalBufferSize(const ArrayDataBase& array_data) {
   std::unordered_set<const uint8_t*> seen_buffers;
   return DoTotalBufferSize(array_data, &seen_buffers);
 }

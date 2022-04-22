@@ -41,7 +41,7 @@ struct SetLookupState : public KernelState {
 
   Status Init(const SetLookupOptions& options) {
     if (options.value_set.kind() == Datum::ARRAY) {
-      const ArrayData& value_set = *options.value_set.array();
+      const ExecArrayData& value_set = *options.value_set.array();
       memo_index_to_value_index.reserve(value_set.length);
       RETURN_NOT_OK(AddArrayValueSet(options, *options.value_set.array()));
     } else if (options.value_set.kind() == Datum::CHUNKED_ARRAY) {
@@ -61,7 +61,7 @@ struct SetLookupState : public KernelState {
     return Status::OK();
   }
 
-  Status AddArrayValueSet(const SetLookupOptions& options, const ArrayData& data,
+  Status AddArrayValueSet(const SetLookupOptions& options, const ArrayDataBase& data,
                           int64_t start_index = 0) {
     using T = typename GetViewType<Type>::T;
     int32_t index = static_cast<int32_t>(start_index);
@@ -227,11 +227,11 @@ Result<std::unique_ptr<KernelState>> InitSetLookup(KernelContext* ctx,
 
 struct IndexInVisitor {
   KernelContext* ctx;
-  const ArrayData& data;
+  const ExecArrayData& data;
   Datum* out;
   Int32Builder builder;
 
-  IndexInVisitor(KernelContext* ctx, const ArrayData& data, Datum* out)
+  IndexInVisitor(KernelContext* ctx, const ExecArrayData& data, Datum* out)
       : ctx(ctx), data(data), out(out), builder(ctx->exec_context()->memory_pool()) {}
 
   Status Visit(const DataType& type) {
@@ -317,7 +317,7 @@ struct IndexInVisitor {
     }
     std::shared_ptr<ArrayData> out_data;
     RETURN_NOT_OK(this->builder.FinishInternal(&out_data));
-    out->value = std::move(out_data);
+    out->value = std::make_shared<ExecArrayData>(*std::move(out_data));
     return Status::OK();
   }
 };
@@ -331,16 +331,16 @@ Status ExecIndexIn(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
 // IsIn writes the results into a preallocated boolean data bitmap
 struct IsInVisitor {
   KernelContext* ctx;
-  const ArrayData& data;
+  const ExecArrayData& data;
   Datum* out;
 
-  IsInVisitor(KernelContext* ctx, const ArrayData& data, Datum* out)
+  IsInVisitor(KernelContext* ctx, const ExecArrayData& data, Datum* out)
       : ctx(ctx), data(data), out(out) {}
 
   Status Visit(const DataType& type) {
     DCHECK_EQ(type.id(), Type::NA);
     const auto& state = checked_cast<const SetLookupState<NullType>&>(*ctx->state());
-    ArrayData* output = out->mutable_array();
+    ExecArrayData* output = out->mutable_array();
     // skip_nulls is honored for consistency with other types
     bit_util::SetBitsTo(output->buffers[1]->mutable_data(), output->offset,
                         output->length, state.value_set_has_null);
@@ -351,7 +351,7 @@ struct IsInVisitor {
   Status ProcessIsIn() {
     using T = typename GetViewType<Type>::T;
     const auto& state = checked_cast<const SetLookupState<Type>&>(*ctx->state());
-    ArrayData* output = out->mutable_array();
+    ExecArrayData* output = out->mutable_array();
 
     FirstTimeBitmapWriter writer(output->buffers[1]->mutable_data(), output->offset,
                                  output->length);

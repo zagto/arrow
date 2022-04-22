@@ -69,12 +69,13 @@ Datum::Datum(const RecordBatch& value)
 
 std::shared_ptr<Array> Datum::make_array() const {
   DCHECK_EQ(Datum::ARRAY, this->kind());
-  return MakeArray(util::get<std::shared_ptr<ArrayData>>(this->value));
+  return MakeArray(util::get<std::shared_ptr<ExecArrayData>>(this->value)->ToArrayData());
 }
 
-const std::shared_ptr<DataType>& Datum::type() const {
+// TODO make reference, no shared_ptr conversions in here, lookup instead
+const std::shared_ptr<DataType> &Datum::type() const {
   if (this->kind() == Datum::ARRAY) {
-    return util::get<std::shared_ptr<ArrayData>>(this->value)->type;
+    return *(new std::shared_ptr<DataType>(util::get<std::shared_ptr<ExecArrayData>>(this->value)->Type().Clone()));
   }
   if (this->kind() == Datum::CHUNKED_ARRAY) {
     return util::get<std::shared_ptr<ChunkedArray>>(this->value)->type();
@@ -100,7 +101,7 @@ const std::shared_ptr<Schema>& Datum::schema() const {
 int64_t Datum::length() const {
   switch (this->kind()) {
     case Datum::ARRAY:
-      return util::get<std::shared_ptr<ArrayData>>(this->value)->length;
+      return util::get<std::shared_ptr<ExecArrayData>>(this->value)->length;
     case Datum::CHUNKED_ARRAY:
       return util::get<std::shared_ptr<ChunkedArray>>(this->value)->length();
     case Datum::RECORD_BATCH:
@@ -117,7 +118,7 @@ int64_t Datum::length() const {
 int64_t Datum::TotalBufferSize() const {
   switch (this->kind()) {
     case Datum::ARRAY:
-      return util::TotalBufferSize(*util::get<std::shared_ptr<ArrayData>>(this->value));
+      return util::TotalBufferSize(*util::get<std::shared_ptr<ExecArrayData>>(this->value)->ToArrayData());
     case Datum::CHUNKED_ARRAY:
       return util::TotalBufferSize(
           *util::get<std::shared_ptr<ChunkedArray>>(this->value));
@@ -135,7 +136,7 @@ int64_t Datum::TotalBufferSize() const {
 
 int64_t Datum::null_count() const {
   if (this->kind() == Datum::ARRAY) {
-    return util::get<std::shared_ptr<ArrayData>>(this->value)->GetNullCount();
+    return util::get<std::shared_ptr<ExecArrayData>>(this->value)->GetNullCount();
   } else if (this->kind() == Datum::CHUNKED_ARRAY) {
     return util::get<std::shared_ptr<ChunkedArray>>(this->value)->null_count();
   } else if (this->kind() == Datum::SCALAR) {
