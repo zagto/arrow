@@ -41,7 +41,7 @@ constexpr int64_t kMillisecondsInDay = 86400000;
 
 template <typename in_type, typename out_type>
 Status ShiftTime(KernelContext* ctx, const util::DivideOrMultiply factor_op,
-                 const int64_t factor, const ExecArrayData& input, ExecArrayData* output) {
+                 const int64_t factor, const ArrayDataBase& input, ExecArrayData* output) {
   const CastOptions& options = checked_cast<const CastState&>(*ctx->state()).options;
   auto in_data = input.GetValues<in_type>(1);
   auto out_data = output->GetMutableValues<out_type>(1);
@@ -57,7 +57,7 @@ Status ShiftTime(KernelContext* ctx, const util::DivideOrMultiply factor_op,
       }
     } else {
 #define RAISE_OVERFLOW_CAST(VAL)                                          \
-  return Status::Invalid("Casting from ", input.type->ToString(), " to ", \
+  return Status::Invalid("Casting from ", input.Type().ToString(), " to ", \
                          output->type->ToString(), " would result in ",   \
                          "out of bounds timestamp: ", VAL);
 
@@ -90,7 +90,7 @@ Status ShiftTime(KernelContext* ctx, const util::DivideOrMultiply factor_op,
       }
     } else {
 #define RAISE_INVALID_CAST(VAL)                                           \
-  return Status::Invalid("Casting from ", input.type->ToString(), " to ", \
+  return Status::Invalid("Casting from ", input.Type().ToString(), " to ", \
                          output->type->ToString(), " would lose data: ", VAL);
 
       if (input.null_count != 0) {
@@ -149,8 +149,8 @@ struct CastFunctor<
   static Status Exec(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
     DCHECK_EQ(batch[0].kind(), Datum::ARRAY);
 
-    const ExecArrayData& input = *batch[0].array();
-    ExecArrayData* output = out->mutable_array();
+    const ArrayDataBase& input = *batch[0].any_array();
+    ExecArrayData* output = out->mutable_exec_array();
 
     // If units are the same, zero copy, otherwise convert
     const auto& in_type = checked_cast<const I&>(*batch[0].type());
@@ -348,11 +348,11 @@ struct CastFunctor<O, I, enable_if_t<is_time_type<I>::value && is_time_type<O>::
   static Status Exec(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
     DCHECK_EQ(batch[0].kind(), Datum::ARRAY);
 
-    const ExecArrayData& input = *batch[0].array();
-    ExecArrayData* output = out->mutable_array();
+    const ArrayDataBase& input = *batch[0].array();
+    ExecArrayData* output = out->mutable_exec_array();
 
     // If units are the same, zero copy, otherwise convert
-    const auto& in_type = checked_cast<const I&>(*input.type);
+    const auto& in_type = checked_cast<const I&>(input.Type());
     const auto& out_type = checked_cast<const O&>(*output->type);
     DCHECK_NE(in_type.unit(), out_type.unit()) << "Do not cast equal types";
     auto conversion = util::GetTimestampConversion(in_type.unit(), out_type.unit());
@@ -370,7 +370,7 @@ struct CastFunctor<Date64Type, Date32Type> {
     DCHECK_EQ(batch[0].kind(), Datum::ARRAY);
 
     return ShiftTime<int32_t, int64_t>(ctx, util::MULTIPLY, kMillisecondsInDay,
-                                       *batch[0].array(), out->mutable_array());
+                                       *batch[0].array(), out->mutable_exec_array());
   }
 };
 
@@ -380,7 +380,7 @@ struct CastFunctor<Date32Type, Date64Type> {
     DCHECK_EQ(batch[0].kind(), Datum::ARRAY);
 
     return ShiftTime<int64_t, int32_t>(ctx, util::DIVIDE, kMillisecondsInDay,
-                                       *batch[0].array(), out->mutable_array());
+                                       *batch[0].array(), out->mutable_exec_array());
   }
 };
 
@@ -400,7 +400,7 @@ struct CastFunctor<TimestampType, Date32Type> {
     // multiply to achieve days -> unit
     conversion.second *= kMillisecondsInDay / 1000;
     return ShiftTime<int32_t, int64_t>(ctx, util::MULTIPLY, conversion.second,
-                                       *batch[0].array(), out->mutable_array());
+                                       *batch[0].array(), out->mutable_exec_array());
   }
 };
 
@@ -414,7 +414,7 @@ struct CastFunctor<TimestampType, Date64Type> {
     // date64 is ms since epoch
     auto conversion = util::GetTimestampConversion(TimeUnit::MILLI, out_type.unit());
     return ShiftTime<int64_t, int64_t>(ctx, conversion.first, conversion.second,
-                                       *batch[0].array(), out->mutable_array());
+                                       *batch[0].any_array(), out->mutable_exec_array());
   }
 };
 

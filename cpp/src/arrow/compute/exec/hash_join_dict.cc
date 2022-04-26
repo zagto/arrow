@@ -105,7 +105,7 @@ static Result<std::shared_ptr<ArrayData>> ConvertImp(
   memset(to_nn, 0xff, bit_util::BytesForBits(batch_length));
 
   if (!is_scalar) {
-    const ExecArrayData& arr = *input.array();
+    const ArrayData& arr = *input.array();
     const FROM* from = arr.GetValues<FROM>(1);
     DCHECK_EQ(arr.length, batch_length);
 
@@ -274,7 +274,7 @@ Status HashJoinDictBuild::Init(ExecContext* ctx, std::shared_ptr<Array> dictiona
 
   ARROW_ASSIGN_OR_RAISE(auto out, encoder.Decode(num_entries, entries_to_take.data()));
 
-  unified_dictionary_ = out[0].array()->ToArrayData();
+  unified_dictionary_ = out[0].array();
   remapped_ids_ = ArrayData::Make(DataTypeAfterRemapping(), length,
                                   {std::move(non_nulls_buf), std::move(ids_buf)});
 
@@ -453,7 +453,7 @@ Result<std::shared_ptr<ArrayData>> HashJoinDictProbe::RemapInput(
       }
 
       ARROW_ASSIGN_OR_RAISE(ExecBatch batch, encoder_.Decode(batch_length, row_ids));
-      return batch.values[0].array()->ToArrayData();
+      return batch.values[0].array();
     }
   } else {
     // CASE 3:
@@ -559,7 +559,7 @@ Status HashJoinDictBuildMulti::PostDecode(
     if (needs_remap_[i]) {
       ARROW_ASSIGN_OR_RAISE(
           decoded_key_batch->values[i],
-          remap_imp_[i].RemapOutput(*decoded_key_batch->values[i].array()->ToArrayData(), ctx));
+          remap_imp_[i].RemapOutput(*decoded_key_batch->values[i].array(), ctx));
     }
   }
   return Status::OK();

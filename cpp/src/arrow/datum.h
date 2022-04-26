@@ -108,7 +108,7 @@ ValueDescr::Shape GetBroadcastShape(const std::vector<ValueDescr>& args);
 /// \class Datum
 /// \brief Variant type for various Arrow C++ data structures
 struct ARROW_EXPORT Datum {
-  enum Kind { NONE, SCALAR, ARRAY, CHUNKED_ARRAY, RECORD_BATCH, TABLE };
+  enum Kind { NONE, SCALAR, ARRAY, CHUNKED_ARRAY, RECORD_BATCH, TABLE, EXEC_ARRAY };
 
   struct Empty {};
 
@@ -116,9 +116,9 @@ struct ARROW_EXPORT Datum {
   // current variant does not have a length.
   static constexpr int64_t kUnknownLength = -1;
 
-  util::Variant<Empty, std::shared_ptr<Scalar>, std::shared_ptr<ExecArrayData>,
+  util::Variant<Empty, std::shared_ptr<Scalar>, std::shared_ptr<ArrayData>,
                 std::shared_ptr<ChunkedArray>, std::shared_ptr<RecordBatch>,
-                std::shared_ptr<Table>>
+                std::shared_ptr<Table>, std::shared_ptr<ExecArrayData>>
       value;
 
   /// \brief Empty datum, to be populated elsewhere
@@ -132,15 +132,15 @@ struct ARROW_EXPORT Datum {
   Datum(std::shared_ptr<Scalar> value)  // NOLINT implicit conversion
       : value(std::move(value)) {}
 
-  // TODO: move?
   Datum(std::shared_ptr<ArrayData> value)  // NOLINT implicit conversion
-      : value(std::make_shared<ExecArrayData>(*value)) {}
-
+      : value(std::move(value)) {}
   Datum(std::shared_ptr<ExecArrayData> value)  // NOLINT implicit conversion
       : value(std::move(value)) {}
 
   Datum(ArrayData arg)  // NOLINT implicit conversion
-      : value(std::make_shared<ExecArrayData>(arg)) {}
+      : value(std::make_shared<ArrayData>(std::move(arg))) {}
+  Datum(ExecArrayData arg)  // NOLINT implicit conversion
+      : value(std::make_shared<ExecArrayData>(std::move(arg))) {}
 
   Datum(const Array& value);                   // NOLINT implicit conversion
   Datum(const std::shared_ptr<Array>& value);  // NOLINT implicit conversion
@@ -199,21 +199,35 @@ struct ARROW_EXPORT Datum {
         return Datum::RECORD_BATCH;
       case 5:
         return Datum::TABLE;
+      case 6:
+        return Datum::EXEC_ARRAY;
       default:
         return Datum::NONE;
     }
   }
 
-  const std::shared_ptr<ExecArrayData>& array() const {
+  const std::shared_ptr<ArrayData>& array() const {
+    return util::get<std::shared_ptr<ArrayData>>(this->value);
+  }
+
+  const std::shared_ptr<ExecArrayData>& exec_array() const {
     return util::get<std::shared_ptr<ExecArrayData>>(this->value);
   }
+
+  // TODO: difference do mutable_array()
+  const ArrayDataBase *any_array() const {
+    return kind() == Datum::ARRAY ? static_cast<ArrayDataBase *>(array().get()) : exec_array().get();
+  }
+
 
   /// \brief The sum of bytes in each buffer referenced by the datum
   /// Note: Scalars report a size of 0
   /// \see arrow::util::TotalBufferSize for caveats
   int64_t TotalBufferSize() const;
 
-  ExecArrayData* mutable_array() const { return this->array().get(); }
+  ArrayData* mutable_array() const { return this->array().get(); }
+  ExecArrayData* mutable_exec_array() const { return this->exec_array().get(); }
+  ArrayDataBase* mutable_any_array() const { return (this->kind() == Datum::ARRAY) ? static_cast<ArrayDataBase*>(this->array().get()) : this->exec_array().get(); }
 
   std::shared_ptr<Array> make_array() const;
 
@@ -245,8 +259,12 @@ struct ARROW_EXPORT Datum {
 
   bool is_array() const { return this->kind() == Datum::ARRAY; }
 
+  bool is_exec_array() const { return this->kind() == Datum::EXEC_ARRAY; }
+
+  bool is_kind_of_array() const { return this->kind() == Datum::ARRAY || this->kind() == Datum::EXEC_ARRAY; }
+
   bool is_arraylike() const {
-    return this->kind() == Datum::ARRAY || this->kind() == Datum::CHUNKED_ARRAY;
+    return this->kind() == Datum::ARRAY || this->kind() == Datum::CHUNKED_ARRAY || this->kind() == Datum::EXEC_ARRAY;
   }
 
   bool is_scalar() const { return this->kind() == Datum::SCALAR; }
@@ -268,6 +286,7 @@ struct ARROW_EXPORT Datum {
   ///
   /// \return nullptr if no type
   const std::shared_ptr<DataType> &type() const;
+  DataType *DirectType() const;
 
   /// \brief The schema of the variant, if any
   ///

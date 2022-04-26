@@ -138,7 +138,7 @@ class ARROW_EXPORT KernelExecutor {
 /// \param[in] batch the data batch
 /// \param[in] out the output ArrayData, must not be null
 ARROW_EXPORT
-Status PropagateNulls(KernelContext* ctx, const ExecBatch& batch, ExecArrayData *out);
+Status PropagateNulls(KernelContext* ctx, const ExecBatch& batch, ArrayDataBase *out);
 
 }  // namespace detail
 }  // namespace compute

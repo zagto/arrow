@@ -81,9 +81,9 @@ struct SumImpl : public ScalarAggregator {
       }
 
       if (is_boolean_type<ArrowType>::value) {
-        this->sum += static_cast<SumCType>(BooleanArray(data->ToArrayData()).true_count());
+        this->sum += static_cast<SumCType>(BooleanArray(data).true_count());
       } else {
-        this->sum += SumArray<CType, SumCType, SimdLevel>(*data->ToArrayData());
+        this->sum += SumArray<CType, SumCType, SimdLevel>(*data);
       }
     } else {
       const auto& data = *batch[0].scalar();
@@ -431,7 +431,7 @@ struct MinMaxImpl : public ScalarAggregator {
 
   Status Consume(KernelContext*, const ExecBatch& batch) override {
     if (batch[0].is_array()) {
-      return ConsumeArray(ArrayType(batch[0].array()->ToArrayData()));
+      return ConsumeArray(ArrayType(batch[0].array()));
     }
     return ConsumeScalar(*batch[0].scalar());
   }
@@ -578,7 +578,7 @@ struct BooleanMinMaxImpl : public MinMaxImpl<BooleanType, SimdLevel> {
       return ConsumeScalar(checked_cast<const BooleanScalar&>(*batch[0].scalar()));
     }
     StateType local;
-    ArrayType arr(batch[0].array()->ToArrayData());
+    ArrayType arr(batch[0].array());
 
     const auto arr_length = arr.length();
     const auto null_count = arr.null_count();

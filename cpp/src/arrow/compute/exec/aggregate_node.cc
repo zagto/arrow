@@ -464,7 +464,7 @@ class GroupByNode : public ExecNode {
 
         RETURN_NOT_OK(agg_kernels_[i]->resize(&batch_ctx, state0->grouper->num_groups()));
         RETURN_NOT_OK(agg_kernels_[i]->merge(&batch_ctx, std::move(*state->agg_states[i]),
-                                             *transposition.array()->ToArrayData()));
+                                             *transposition.array()));
         state->agg_states[i].reset();
       }
     }

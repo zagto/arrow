@@ -3382,9 +3382,10 @@ Result<Datum> GroupBy(const std::vector<Datum>& arguments, const std::vector<Dat
   }
 
   int64_t length = out_data[0]->length;
-  return ArrayData::Make(struct_(std::move(out_fields)), length,
+  // TODO!!!!!!!!!!!
+  return *(new ArrayData(struct_(std::move(out_fields)), length,
                          {/*null_bitmap=*/nullptr}, std::move(out_data),
-                         /*null_count=*/0);
+                         /*null_count=*/0));
 }
 
 Result<std::shared_ptr<ListArray>> Grouper::ApplyGroupings(const ListArray& groupings,

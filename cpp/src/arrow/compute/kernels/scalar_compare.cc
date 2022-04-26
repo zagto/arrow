@@ -369,13 +369,13 @@ struct ScalarMinMax {
       return Status::OK();
     }
 
-    ExecArrayData* output = out->mutable_array();
+    ExecArrayData* output = out->mutable_exec_array();
 
     // At least one array, two or more arguments
     std::vector<std::shared_ptr<ExecArrayData>> arrays;
     for (const auto& arg : batch.values) {
       if (!arg.is_array()) continue;
-      arrays.push_back(arg.array());
+      arrays.push_back(arg.exec_array());
     }
 
     bool initialize_output = true;
@@ -578,7 +578,8 @@ struct BinaryScalarMinMax {
     std::shared_ptr<Array> string_array;
     RETURN_NOT_OK(builder.Finish(&string_array));
     *out = *string_array->data();
-    out->mutable_array()->type = batch[0].type();
+    // TODO: without shared_ptr inbetween
+    out->mutable_exec_array()->type = batch[0].DirectType();
     DCHECK_EQ(batch.length, out->array()->length);
     return Status::OK();
   }
@@ -594,8 +595,8 @@ struct BinaryScalarMinMax {
           estimated_final_size = std::max(estimated_final_size, scalar.value->size());
         }
       } else {
-        DCHECK(datum.is_array());
-        const ExecArrayData& array = *datum.array();
+        DCHECK(datum.is_kind_of_array());
+        const ArrayDataBase& array = *datum.array();
         const auto offsets = array.GetValues<offset_type>(1);
         int64_t estimated_current_size = offsets[array.length] - offsets[0];
         estimated_final_size = std::max(estimated_final_size, estimated_current_size);

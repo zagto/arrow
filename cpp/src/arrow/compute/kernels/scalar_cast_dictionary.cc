@@ -75,10 +75,10 @@ Status CastDictionary(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
   }
 
   // if input is array
-  const std::shared_ptr<ArrayData>& in_array = batch[0].array()->ToArrayData();
+  const std::shared_ptr<ArrayData>& in_array = batch[0].array();
   const auto& in_type = checked_cast<const DictionaryType&>(*in_array->type);
 
-  ArrayData* out_array = out->mutable_array()->ToArrayData().get();
+  ArrayDataBase* out_array = out->mutable_array();
 
   if (in_type.index_type()->Equals(out_type->index_type())) {
     out_array->buffers[0] = in_array->buffers[0];
@@ -103,7 +103,7 @@ Status CastDictionary(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
     const std::shared_ptr<Array>& dict_arr = MakeArray(in_array->dictionary);
     ARROW_ASSIGN_OR_RAISE(auto casted_data, Cast(dict_arr, out_type->value_type(),
                                                  options, ctx->exec_context()));
-    out_array->dictionary = casted_data.array()->ToArrayData();
+    out_array->dictionary = casted_data.array();
   }
   return Status::OK();
 }

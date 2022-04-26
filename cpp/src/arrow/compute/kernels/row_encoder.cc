@@ -76,7 +76,7 @@ Status BooleanKeyEncoder::Encode(const Datum& data, int64_t batch_length,
                                  uint8_t** encoded_bytes) {
   if (data.is_array()) {
     VisitArrayDataInline<BooleanType>(
-        *data.array()->ToArrayData(),
+        *data.array(),
         [&](bool value) {
           auto& encoded_ptr = *encoded_bytes++;
           *encoded_ptr++ = kValidByte;

@@ -552,7 +552,7 @@ template <typename Type>
 struct OutputAdapter<Type, enable_if_boolean<Type>> {
   template <typename Generator>
   static Status Write(KernelContext*, Datum* out, Generator&& generator) {
-    ExecArrayData* out_arr = out->mutable_array();
+    ExecArrayData* out_arr = out->mutable_exec_array();
     auto out_bitmap = out_arr->buffers[1]->mutable_data();
     GenerateBitsUnrolled(out_bitmap, out_arr->offset, out_arr->length,
                          std::forward<Generator>(generator));
@@ -566,7 +566,7 @@ struct OutputAdapter<Type, enable_if_c_number_or_decimal<Type>> {
 
   template <typename Generator>
   static Status Write(KernelContext*, Datum* out, Generator&& generator) {
-    ArrayDataBase* out_arr = out->mutable_array();
+    ArrayDataBase* out_arr = out->mutable_any_array();
     auto out_data = out_arr->GetMutableValues<T>(1);
     // TODO: Is this as fast as a more explicitly inlined function?
     for (int64_t i = 0; i < out_arr->length; ++i) {
@@ -607,7 +607,7 @@ struct ScalarUnary {
   using OutValue = typename GetOutputType<OutType>::T;
   using Arg0Value = typename GetViewType<Arg0Type>::T;
 
-  static Status ExecArray(KernelContext* ctx, const ExecArrayData& arg0, Datum* out) {
+  static Status ExecArray(KernelContext* ctx, const ArrayDataBase& arg0, Datum* out) {
     Status st = Status::OK();
     ArrayIterator<Arg0Type> arg0_it(arg0);
     RETURN_NOT_OK(OutputAdapter<OutType>::Write(ctx, out, [&]() -> OutValue {
@@ -632,7 +632,7 @@ struct ScalarUnary {
 
   static Status Exec(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
     if (batch[0].kind() == Datum::ARRAY) {
-      return ExecArray(ctx, *batch[0].array(), out);
+      return ExecArray(ctx, *batch[0].any_array(), out);
     } else {
       return ExecScalar(ctx, *batch[0].scalar(), out);
     }
@@ -706,10 +706,10 @@ struct ScalarUnaryNotNullStateful {
 
   template <typename Type>
   struct ArrayExec<Type, enable_if_t<is_boolean_type<Type>::value>> {
-    static Status Exec(const ThisType& functor, KernelContext* ctx, const ExecArrayData& arg0,
+    static Status Exec(const ThisType& functor, KernelContext* ctx, const ArrayDataBase& arg0,
                        Datum* out) {
       Status st = Status::OK();
-      ExecArrayData* out_arr = out->mutable_array();
+      ExecArrayData* out_arr = out->mutable_exec_array();
       FirstTimeBitmapWriter out_writer(out_arr->buffers[1]->mutable_data(),
                                        out_arr->offset, out_arr->length);
       VisitArrayValuesInline<Arg0Type>(
@@ -790,8 +790,8 @@ struct ScalarBinary {
   using Arg0Value = typename GetViewType<Arg0Type>::T;
   using Arg1Value = typename GetViewType<Arg1Type>::T;
 
-  static Status ArrayArray(KernelContext* ctx, const ExecArrayData& arg0,
-                           const ExecArrayData& arg1, Datum* out) {
+  static Status ArrayArray(KernelContext* ctx, const ArrayDataBase& arg0,
+                           const ArrayDataBase& arg1, Datum* out) {
     Status st = Status::OK();
     ArrayIterator<Arg0Type> arg0_it(arg0);
     ArrayIterator<Arg1Type> arg1_it(arg1);
@@ -802,7 +802,7 @@ struct ScalarBinary {
     return st;
   }
 
-  static Status ArrayScalar(KernelContext* ctx, const ExecArrayData& arg0, const Scalar& arg1,
+  static Status ArrayScalar(KernelContext* ctx, const ArrayDataBase& arg0, const Scalar& arg1,
                             Datum* out) {
     Status st = Status::OK();
     ArrayIterator<Arg0Type> arg0_it(arg0);
@@ -814,7 +814,7 @@ struct ScalarBinary {
     return st;
   }
 
-  static Status ScalarArray(KernelContext* ctx, const Scalar& arg0, const ExecArrayData& arg1,
+  static Status ScalarArray(KernelContext* ctx, const Scalar& arg0, const ArrayDataBase& arg1,
                             Datum* out) {
     Status st = Status::OK();
     auto arg0_val = UnboxScalar<Arg0Type>::Unbox(arg0);
@@ -842,13 +842,13 @@ struct ScalarBinary {
   static Status Exec(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
     if (batch[0].kind() == Datum::ARRAY) {
       if (batch[1].kind() == Datum::ARRAY) {
-        return ArrayArray(ctx, *batch[0].array(), *batch[1].array(), out);
+        return ArrayArray(ctx, *batch[0].any_array(), *batch[1].any_array(), out);
       } else {
-        return ArrayScalar(ctx, *batch[0].array(), *batch[1].scalar(), out);
+        return ArrayScalar(ctx, *batch[0].any_array(), *batch[1].scalar(), out);
       }
     } else {
       if (batch[1].kind() == Datum::ARRAY) {
-        return ScalarArray(ctx, *batch[0].scalar(), *batch[1].array(), out);
+        return ScalarArray(ctx, *batch[0].scalar(), *batch[1].any_array(), out);
       } else {
         return ScalarScalar(ctx, *batch[0].scalar(), *batch[1].scalar(), out);
       }
@@ -870,10 +870,10 @@ struct ScalarBinaryNotNullStateful {
 
   // NOTE: In ArrayExec<Type>, Type is really OutputType
 
-  Status ArrayArray(KernelContext* ctx, const ExecArrayData& arg0, const ExecArrayData& arg1,
+  Status ArrayArray(KernelContext* ctx, const ArrayDataBase& arg0, const ArrayDataBase& arg1,
                     Datum* out) {
     Status st = Status::OK();
-    OutputArrayWriter<OutType> writer(out->mutable_array());
+    OutputArrayWriter<OutType> writer(out->mutable_exec_array());
     VisitTwoArrayValuesInline<Arg0Type, Arg1Type>(
         arg0, arg1,
         [&](Arg0Value u, Arg1Value v) {
@@ -883,10 +883,10 @@ struct ScalarBinaryNotNullStateful {
     return st;
   }
 
-  Status ArrayScalar(KernelContext* ctx, const ExecArrayData& arg0, const Scalar& arg1,
+  Status ArrayScalar(KernelContext* ctx, const ArrayDataBase& arg0, const Scalar& arg1,
                      Datum* out) {
     Status st = Status::OK();
-    OutputArrayWriter<OutType> writer(out->mutable_array());
+    OutputArrayWriter<OutType> writer(out->mutable_exec_array());
     if (arg1.is_valid) {
       const auto arg1_val = UnboxScalar<Arg1Type>::Unbox(arg1);
       VisitArrayValuesInline<Arg0Type>(
@@ -897,15 +897,15 @@ struct ScalarBinaryNotNullStateful {
           },
           [&]() { writer.WriteNull(); });
     } else {
-      writer.WriteAllNull(out->mutable_array()->length);
+      writer.WriteAllNull(out->mutable_exec_array()->length);
     }
     return st;
   }
 
-  Status ScalarArray(KernelContext* ctx, const Scalar& arg0, const ExecArrayData& arg1,
+  Status ScalarArray(KernelContext* ctx, const Scalar& arg0, const ArrayDataBase& arg1,
                      Datum* out) {
     Status st = Status::OK();
-    OutputArrayWriter<OutType> writer(out->mutable_array());
+    OutputArrayWriter<OutType> writer(out->mutable_exec_array());
     if (arg0.is_valid) {
       const auto arg0_val = UnboxScalar<Arg0Type>::Unbox(arg0);
       VisitArrayValuesInline<Arg1Type>(
@@ -916,7 +916,7 @@ struct ScalarBinaryNotNullStateful {
           },
           [&]() { writer.WriteNull(); });
     } else {
-      writer.WriteAllNull(out->mutable_array()->length);
+      writer.WriteAllNull(out->mutable_exec_array()->length);
     }
     return st;
   }

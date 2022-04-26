@@ -74,8 +74,11 @@ std::shared_ptr<Array> Datum::make_array() const {
 
 // TODO make reference, no shared_ptr conversions in here, lookup instead
 const std::shared_ptr<DataType> &Datum::type() const {
+  if (this->kind() == Datum::EXEC_ARRAY) {
+    return *(new std::shared_ptr<DataType>(util::get<std::shared_ptr<ExecArrayData>>(this->value)->type->Clone()));
+  }
   if (this->kind() == Datum::ARRAY) {
-    return *(new std::shared_ptr<DataType>(util::get<std::shared_ptr<ExecArrayData>>(this->value)->Type().Clone()));
+    return util::get<std::shared_ptr<ArrayData>>(this->value)->type;
   }
   if (this->kind() == Datum::CHUNKED_ARRAY) {
     return util::get<std::shared_ptr<ChunkedArray>>(this->value)->type();
@@ -86,6 +89,22 @@ const std::shared_ptr<DataType> &Datum::type() const {
   static std::shared_ptr<DataType> no_type;
   return no_type;
 }
+
+// TODO make reference, no shared_ptr conversions in here, lookup instead
+DataType *Datum::DirectType() const {
+  if (this->kind() == Datum::ARRAY) {
+    return util::get<std::shared_ptr<ExecArrayData>>(this->value)->type;
+  }
+  if (this->kind() == Datum::CHUNKED_ARRAY) {
+    return util::get<std::shared_ptr<ChunkedArray>>(this->value)->type().get();
+  }
+  if (this->kind() == Datum::SCALAR) {
+    return util::get<std::shared_ptr<Scalar>>(this->value)->type.get();
+
+  }
+  return nullptr;
+}
+
 
 const std::shared_ptr<Schema>& Datum::schema() const {
   if (this->kind() == Datum::RECORD_BATCH) {
@@ -100,8 +119,10 @@ const std::shared_ptr<Schema>& Datum::schema() const {
 
 int64_t Datum::length() const {
   switch (this->kind()) {
-    case Datum::ARRAY:
+    case Datum::EXEC_ARRAY:
       return util::get<std::shared_ptr<ExecArrayData>>(this->value)->length;
+    case Datum::ARRAY:
+      return util::get<std::shared_ptr<ArrayData>>(this->value)->length;
     case Datum::CHUNKED_ARRAY:
       return util::get<std::shared_ptr<ChunkedArray>>(this->value)->length();
     case Datum::RECORD_BATCH:

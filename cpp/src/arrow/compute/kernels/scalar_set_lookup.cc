@@ -41,7 +41,7 @@ struct SetLookupState : public KernelState {
 
   Status Init(const SetLookupOptions& options) {
     if (options.value_set.kind() == Datum::ARRAY) {
-      const ExecArrayData& value_set = *options.value_set.array();
+      const ArrayData& value_set = *options.value_set.array();
       memo_index_to_value_index.reserve(value_set.length);
       RETURN_NOT_OK(AddArrayValueSet(options, *options.value_set.array()));
     } else if (options.value_set.kind() == Datum::CHUNKED_ARRAY) {
@@ -227,11 +227,11 @@ Result<std::unique_ptr<KernelState>> InitSetLookup(KernelContext* ctx,
 
 struct IndexInVisitor {
   KernelContext* ctx;
-  const ExecArrayData& data;
+  const ArrayDataBase& data;
   Datum* out;
   Int32Builder builder;
 
-  IndexInVisitor(KernelContext* ctx, const ExecArrayData& data, Datum* out)
+  IndexInVisitor(KernelContext* ctx, const ArrayDataBase& data, Datum* out)
       : ctx(ctx), data(data), out(out), builder(ctx->exec_context()->memory_pool()) {}
 
   Status Visit(const DataType& type) {
@@ -311,7 +311,7 @@ struct IndexInVisitor {
   }
 
   Status Execute() {
-    Status s = VisitTypeInline(*data.type, this);
+    Status s = VisitTypeInline(data.Type(), this);
     if (!s.ok()) {
       return s;
     }
@@ -331,16 +331,16 @@ Status ExecIndexIn(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
 // IsIn writes the results into a preallocated boolean data bitmap
 struct IsInVisitor {
   KernelContext* ctx;
-  const ExecArrayData& data;
+  const ArrayDataBase& data;
   Datum* out;
 
-  IsInVisitor(KernelContext* ctx, const ExecArrayData& data, Datum* out)
+  IsInVisitor(KernelContext* ctx, const ArrayDataBase& data, Datum* out)
       : ctx(ctx), data(data), out(out) {}
 
   Status Visit(const DataType& type) {
     DCHECK_EQ(type.id(), Type::NA);
     const auto& state = checked_cast<const SetLookupState<NullType>&>(*ctx->state());
-    ExecArrayData* output = out->mutable_array();
+    ExecArrayData* output = out->mutable_exec_array();
     // skip_nulls is honored for consistency with other types
     bit_util::SetBitsTo(output->buffers[1]->mutable_data(), output->offset,
                         output->length, state.value_set_has_null);
@@ -351,7 +351,7 @@ struct IsInVisitor {
   Status ProcessIsIn() {
     using T = typename GetViewType<Type>::T;
     const auto& state = checked_cast<const SetLookupState<Type>&>(*ctx->state());
-    ExecArrayData* output = out->mutable_array();
+    ExecArrayData* output = out->mutable_exec_array();
 
     FirstTimeBitmapWriter writer(output->buffers[1]->mutable_data(), output->offset,
                                  output->length);
@@ -405,7 +405,7 @@ struct IsInVisitor {
     return ProcessIsIn<MonthDayNanoIntervalType>();
   }
 
-  Status Execute() { return VisitTypeInline(*data.type, this); }
+  Status Execute() { return VisitTypeInline(data.Type(), this); }
 };
 
 Status ExecIsIn(KernelContext* ctx, const ExecBatch& batch, Datum* out) {

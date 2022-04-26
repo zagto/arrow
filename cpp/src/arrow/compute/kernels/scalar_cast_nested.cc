@@ -135,7 +135,7 @@ struct CastList {
                           Cast(values, child_type, options, ctx->exec_context()));
 
     DCHECK_EQ(Datum::ARRAY, cast_values.kind());
-    out_array->child_data.push_back(cast_values.array()->ToArrayData());
+    out_array->child_data.push_back(cast_values.array());
     return Status::OK();
   }
 };
@@ -195,8 +195,8 @@ struct CastStruct {
       return Status::OK();
     }
 
-    const ExecArrayData& in_array = *batch[0].array();
-    ExecArrayData* out_array = out->mutable_array();
+    const ArrayDataBase& in_array = *batch[0].array();
+    ArrayDataBase* out_array = out->mutable_array();
 
     if (in_array.buffers[0]) {
       ARROW_ASSIGN_OR_RAISE(out_array->buffers[0],
@@ -212,7 +212,7 @@ struct CastStruct {
                             Cast(values, target_type, options, ctx->exec_context()));
 
       DCHECK_EQ(Datum::ARRAY, cast_values.kind());
-      out_array->child_data.push_back(cast_values.array()->ToArrayData());
+      out_array->child_data.push_back(cast_values.array());
     }
 
     return Status::OK();

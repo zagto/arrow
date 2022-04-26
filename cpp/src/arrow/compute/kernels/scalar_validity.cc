@@ -38,7 +38,7 @@ struct IsValidOperator {
     return Status::OK();
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& arr, ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ArrayDataBase& arr, ArrayDataBase* out) {
     DCHECK_EQ(out->offset, 0);
     DCHECK_LE(out->length, arr.length);
     if (arr.MayHaveNulls()) {
@@ -107,7 +107,7 @@ struct IsNullOperator {
   }
 
   template <typename T>
-  static void SetNanBits(const ArrayData& arr, uint8_t* out_bitmap, int64_t out_offset) {
+  static void SetNanBits(const ArrayDataBase& arr, uint8_t* out_bitmap, int64_t out_offset) {
     const T* data = arr.GetValues<T>(1);
     for (int64_t i = 0; i < arr.length; ++i) {
       if (std::isnan(data[i])) {
@@ -116,7 +116,7 @@ struct IsNullOperator {
     }
   }
 
-  static Status Call(KernelContext* ctx, const ArrayData& arr, ArrayData* out) {
+  static Status Call(KernelContext* ctx, const ArrayDataBase& arr, ArrayDataBase* out) {
     const auto& options = NanOptionsState::Get(ctx);
 
     uint8_t* out_bitmap = out->buffers[1]->mutable_data();
@@ -129,8 +129,8 @@ struct IsNullOperator {
       bit_util::SetBitsTo(out_bitmap, out->offset, out->length, false);
     }
 
-    if (is_floating(arr.type->id()) && options.nan_is_null) {
-      switch (arr.type->id()) {
+    if (is_floating(arr.Type().id()) && options.nan_is_null) {
+      switch (arr.Type().id()) {
         case Type::FLOAT:
           SetNanBits<float>(arr, out_bitmap, out->offset);
           break;
@@ -139,7 +139,7 @@ struct IsNullOperator {
           break;
         default:
           return Status::NotImplemented("NaN detection not implemented for type ",
-                                        arr.type->ToString());
+                                        arr.Type().ToString());
       }
     }
     return Status::OK();
@@ -183,7 +183,7 @@ Status ConstBoolExec(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
     checked_cast<BooleanScalar*>(out->scalar().get())->value = kConstant;
     return Status::OK();
   }
-  ArrayData* array = out->mutable_array();
+  ExecArrayData* array = out->mutable_exec_array();
   bit_util::SetBitsTo(array->buffers[1]->mutable_data(), array->offset, array->length,
                       kConstant);
   return Status::OK();
@@ -256,7 +256,7 @@ Status IsValidExec(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
       std::shared_ptr<Array> false_values;
       RETURN_NOT_OK(MakeArrayFromScalar(*false_value, out->length(), ctx->memory_pool())
                         .Value(&false_values));
-      out->value = false_values->data();
+      out->value = std::make_shared<ExecArrayData>(*false_values->data());
     }
     return Status::OK();
   } else {
@@ -271,7 +271,7 @@ Status IsNullExec(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
       out->value = std::make_shared<BooleanScalar>(true);
     } else {
       // Data is preallocated
-      ArrayData* out_arr = out->mutable_array();
+      ExecArrayData* out_arr = out->mutable_exec_array();
       bit_util::SetBitsTo(out_arr->buffers[1]->mutable_data(), out_arr->offset,
                           out_arr->length, true);
     }

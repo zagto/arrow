@@ -75,7 +75,7 @@ struct CountImpl : public ScalarAggregator {
     if (options.mode == CountOptions::ALL) {
       this->non_nulls += batch.length;
     } else if (batch[0].is_array()) {
-      const ArrayDataBase& input = *batch[0].array();
+      const ArrayData& input = *batch[0].array();
       const int64_t nulls = input.GetNullCount();
       this->nulls += nulls;
       this->non_nulls += input.length - nulls;
@@ -135,7 +135,7 @@ struct CountDistinctImpl : public ScalarAggregator {
 
   Status Consume(KernelContext*, const ExecBatch& batch) override {
     if (batch[0].is_array()) {
-      const ExecArrayData& arr = *batch[0].array();
+      const ArrayData& arr = *batch[0].array();
       auto visit_null = []() { return Status::OK(); };
       auto visit_value = [&](VisitorArgType arg) {
         int y;

@@ -420,7 +420,7 @@ template <typename T>
 Status ScalarQuantile(KernelContext* ctx, const QuantileOptions& options,
                       const Scalar& scalar, Datum* out) {
   using CType = typename TypeTraits<T>::CType;
-  ExecArrayData* output = out->mutable_array();
+  ArrayDataBase* output = out->mutable_array();
   output->length = options.q.size();
   auto out_type = IsDataPoint(options) ? scalar.type : float64();
   ARROW_ASSIGN_OR_RAISE(

@@ -157,7 +157,7 @@ void CastNumberToNumberUnsafe(Type::type in_type, Type::type out_type, const Dat
 Status UnpackDictionary(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
   DCHECK(out->is_array());
 
-  DictionaryArray dict_arr(batch[0].array()->ToArrayData());
+  DictionaryArray dict_arr(batch[0].array());
   const CastOptions& options = checked_cast<const CastState&>(*ctx->state()).options;
 
   const auto& dict_type = *dict_arr.dictionary()->type();
@@ -180,7 +180,7 @@ Status OutputAllNull(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
   if (out->is_scalar()) {
     out->scalar()->is_valid = false;
   } else {
-    ExecArrayData* output = out->mutable_array();
+    ArrayDataBase* output = out->mutable_array();
     output->buffers = {nullptr};
     output->null_count = batch.length;
   }
@@ -204,7 +204,7 @@ Status CastFromExtension(KernelContext* ctx, const ExecBatch& batch, Datum* out)
     }
   } else {
     DCHECK_EQ(batch[0].kind(), Datum::ARRAY);
-    ExtensionArray extension(batch[0].array()->ToArrayData());
+    ExtensionArray extension(batch[0].array());
     return Cast(*extension.storage(), out->type(), options, ctx->exec_context())
         .Value(out);
   }
@@ -212,9 +212,9 @@ Status CastFromExtension(KernelContext* ctx, const ExecBatch& batch, Datum* out)
 
 Status CastFromNull(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
   if (!batch[0].is_scalar()) {
-    ExecArrayData* output = out->mutable_array();
+    ArrayDataBase* output = out->mutable_array();
     std::shared_ptr<Array> nulls;
-    RETURN_NOT_OK(MakeArrayOfNull(output->type->Clone(), batch.length).Value(&nulls));
+    RETURN_NOT_OK(MakeArrayOfNull(output->Type().Clone(), batch.length).Value(&nulls));
     out->value = std::make_shared<ExecArrayData>(*nulls->data());
   }
   return Status::OK();
@@ -241,8 +241,8 @@ Status ZeroCopyCastExec(KernelContext* ctx, const ExecBatch& batch, Datum* out) 
   DCHECK_EQ(batch[0].kind(), Datum::ARRAY);
   // Make a copy of the buffers into a destination array without carrying
   // the type
-  const ExecArrayData& input = *batch[0].array();
-  ExecArrayData* output = out->mutable_array();
+  const ArrayDataBase& input = *batch[0].any_array();
+  ArrayDataBase* output = out->mutable_array();
   output->length = input.length;
   output->SetNullCount(input.null_count);
   output->buffers = input.buffers;

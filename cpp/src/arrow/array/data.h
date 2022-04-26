@@ -288,7 +288,7 @@ template struct TypedArrayData<DataType *>;
 using ArrayData = TypedArrayData<std::shared_ptr<DataType>>;
 //using ExecArrayData = TypedArrayData<std::shared_ptr<DataType>>;
 
-class ExecArrayData : public TypedArrayData<DataType *> {
+struct ExecArrayData : public TypedArrayData<DataType *> {
 public:
   using TypedArrayData::TypedArrayData;
   explicit ExecArrayData(ArrayData &regular) {

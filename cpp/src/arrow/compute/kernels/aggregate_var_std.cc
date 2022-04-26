@@ -168,7 +168,7 @@ struct VarStdImpl : public ScalarAggregator {
 
   Status Consume(KernelContext*, const ExecBatch& batch) override {
     if (batch[0].is_array()) {
-      ArrayType array(batch[0].array()->ToArrayData());
+      ArrayType array(batch[0].array());
       this->state.Consume(array);
     } else {
       this->state.Consume(*batch[0].scalar(), batch.length);

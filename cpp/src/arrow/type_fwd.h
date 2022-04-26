@@ -68,12 +68,14 @@ using FieldVector = std::vector<std::shared_ptr<Field>>;
 
 class Array;
 struct ArrayDataBase;
+struct ExecArrayData;
 template<typename T> struct TypedArrayData;
 using ArrayData = TypedArrayData<std::shared_ptr<DataType>>;
 class ArrayBuilder;
 struct Scalar;
 
 using ArrayDataVector = std::vector<std::shared_ptr<ArrayData>>;
+using ExecArrayDataVector = std::vector<std::shared_ptr<ExecArrayData>>;
 using ArrayVector = std::vector<std::shared_ptr<Array>>;
 using ScalarVector = std::vector<std::shared_ptr<Scalar>>;
 

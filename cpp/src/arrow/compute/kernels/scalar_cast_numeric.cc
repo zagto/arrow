@@ -79,8 +79,8 @@ Status CheckFloatTruncation(const Datum& input, const Datum& output) {
     return Status::OK();
   }
 
-  const ArrayData& in_array = *input.array();
-  const ArrayData& out_array = *output.array();
+  const ExecArrayData& in_array = *input.exec_array();
+  const ExecArrayData& out_array = *output.exec_array();
 
   const InT* in_data = in_array.GetValues<InT>(1);
   const OutT* out_data = out_array.GetValues<OutT>(1);

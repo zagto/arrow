@@ -85,7 +85,7 @@ struct StringTransformExecBase {
         transform->MaxCodeunits(input_nstrings, input_ncodeunits);
     RETURN_NOT_OK(CheckOutputCapacity(max_output_ncodeunits));
 
-    ArrayData* output = out->mutable_array();
+    ExecArrayData* output = out->mutable_exec_array();
     ARROW_ASSIGN_OR_RAISE(auto values_buffer, ctx->Allocate(max_output_ncodeunits));
     output->buffers[2] = values_buffer;
 
@@ -243,10 +243,10 @@ struct StringPredicateFunctor {
   static Status Exec(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
     Status st = Status::OK();
     EnsureUtf8LookupTablesFilled();
-    if (batch[0].kind() == Datum::ARRAY) {
-      const ArrayData& input = *batch[0].array();
+    if (batch[0].is_kind_of_array()) {
+      const ArrayDataBase& input = *batch[0].array();
       ArrayIterator<Type> input_it(input);
-      ArrayData* out_arr = out->mutable_array();
+      ExecArrayData* out_arr = out->mutable_exec_array();
       ::arrow::internal::GenerateBitsUnrolled(
           out_arr->buffers[1]->mutable_data(), out_arr->offset, input.length,
           [&]() -> bool {
@@ -357,15 +357,15 @@ struct StringSplitExec {
     SplitFinder finder;
     RETURN_NOT_OK(finder.PreExec(options));
     if (batch[0].kind() == Datum::ARRAY) {
-      return Execute(ctx, &finder, batch[0].array(), out);
+      return Execute(ctx, &finder, batch[0].exec_array(), out);
     }
     DCHECK_EQ(batch[0].kind(), Datum::SCALAR);
     return Execute(ctx, &finder, batch[0].scalar(), out);
   }
 
   Status Execute(KernelContext* ctx, SplitFinder* finder,
-                 const std::shared_ptr<ArrayData>& data, Datum* out) {
-    const ArrayType input(data);
+                 const std::shared_ptr<ExecArrayData>& data, Datum* out) {
+    const ArrayType input(data->ToArrayData());
 
     BuilderType builder(input.type(), ctx->memory_pool());
     // A slight overestimate of the data needed
@@ -373,7 +373,7 @@ struct StringSplitExec {
     // The minimum amount of strings needed
     RETURN_NOT_OK(builder.Resize(input.length() - input.null_count()));
 
-    ArrayData* output_list = out->mutable_array();
+    ExecArrayData* output_list = out->mutable_exec_array();
     // List offsets were preallocated
     auto* list_offsets = output_list->GetMutableValues<list_offset_type>(1);
     DCHECK_NE(list_offsets, nullptr);
