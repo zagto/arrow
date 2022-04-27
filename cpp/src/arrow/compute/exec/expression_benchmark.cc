@@ -157,7 +157,7 @@ BENCHMARK_CAPTURE(ExecuteScalarExpressionOverhead, complex_expression, complex_e
 BENCHMARK_CAPTURE(ExecuteScalarExpressionOverhead, simple_expression, simple_expression)
     ->ArgNames({"rows_per_batch"})
     ->RangeMultiplier(10)
-    ->Range(10, 10000000)->Iterations(15)
+    ->Range(10, 10000000)//->Iterations(15)
     ->DenseThreadRange(1, std::thread::hardware_concurrency(),
                        std::thread::hardware_concurrency());
 BENCHMARK_CAPTURE(ExecuteScalarExpressionOverhead, zero_copy_expression,

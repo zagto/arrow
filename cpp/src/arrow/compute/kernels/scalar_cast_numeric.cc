@@ -39,9 +39,9 @@ namespace internal {
 Status CastIntegerToInteger(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
   const auto& options = checked_cast<const CastState*>(ctx->state())->options;
   if (!options.allow_int_overflow) {
-    RETURN_NOT_OK(IntegersCanFit(batch[0], *out->type()));
+    RETURN_NOT_OK(IntegersCanFit(batch[0], *out->DirectType()));
   }
-  CastNumberToNumberUnsafe(batch[0].type()->id(), out->type()->id(), batch[0], out);
+  CastNumberToNumberUnsafe(batch[0].DirectType()->id(), out->DirectType()->id(), batch[0], out);
   return Status::OK();
 }
 

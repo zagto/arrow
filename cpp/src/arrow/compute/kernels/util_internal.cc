@@ -60,7 +60,7 @@ PrimitiveArg GetPrimitiveArg(const ArrayData& arr) {
 ArrayKernelExec TrivialScalarUnaryAsArraysExec(ArrayKernelExec exec,
                                                NullHandling::type null_handling) {
   return [=](KernelContext* ctx, const ExecBatch& batch, Datum* out) -> Status {
-    if (out->is_array()) {
+    if (out->is_kind_of_array()) {
       return exec(ctx, batch, out);
     }
 

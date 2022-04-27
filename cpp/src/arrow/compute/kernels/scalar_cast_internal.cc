@@ -242,7 +242,7 @@ Status ZeroCopyCastExec(KernelContext* ctx, const ExecBatch& batch, Datum* out) 
   // Make a copy of the buffers into a destination array without carrying
   // the type
   const ArrayDataBase& input = *batch[0].any_array();
-  ArrayDataBase* output = out->mutable_array();
+  ArrayDataBase* output = out->mutable_exec_array();
   output->length = input.length;
   output->SetNullCount(input.null_count);
   output->buffers = input.buffers;

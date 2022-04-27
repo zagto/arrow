@@ -37,7 +37,7 @@ namespace arrow {
 Datum::Datum(const Array& value) : Datum(value.data()) {}
 
 Datum::Datum(const std::shared_ptr<Array>& value)
-    : Datum(value ? std::make_shared<ExecArrayData>(*value->data()) : NULLPTR) {
+    : Datum(value ? /*std::make_shared<ExecArrayData>(* */ value->data() /*)*/ : NULLPTR) {
 }
 
 Datum::Datum(std::shared_ptr<ChunkedArray> value) : value(std::move(value)) {}
@@ -76,7 +76,7 @@ std::shared_ptr<Array> Datum::make_array() const {
 // TODO make reference, no shared_ptr conversions in here, lookup instead
 const std::shared_ptr<DataType> &Datum::type() const {
   if (this->kind() == Datum::EXEC_ARRAY) {
-    assert(false);
+    //assert(false);
     return *(new std::shared_ptr<DataType>(util::get<std::shared_ptr<ExecArrayData>>(this->value)->type->Clone()));
   }
   if (this->kind() == Datum::ARRAY) {

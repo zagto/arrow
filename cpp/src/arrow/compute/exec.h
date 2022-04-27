@@ -239,7 +239,8 @@ struct ARROW_EXPORT ExecBatch {
   std::vector<ValueDescr> GetDescriptors() const {
     std::vector<ValueDescr> result;
     for (const auto& value : this->values) {
-      result.emplace_back(value.descr());
+      result.emplace_back(value.is_exec_array() ? value.DirectType()->Clone() : value.type());
+      result.back().shape = value.is_arraylike() ? ValueDescr::ARRAY : ValueDescr::SCALAR;
     }
     return result;
   }

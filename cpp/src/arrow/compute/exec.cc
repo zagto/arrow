@@ -573,7 +573,7 @@ class KernelExecutorImpl : public KernelExecutor {
 
     // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     // !!!!!!!!!!!!!!!!!!!!!
-    output_descr_.shape = ValueDescr::ARRAY;
+    //output_descr_.shape = ValueDescr::ARRAY;
 
     return Status::OK();
   }

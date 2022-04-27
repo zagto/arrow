@@ -155,6 +155,7 @@ int64_t ArrayDataBase::GetNullCount() const {
 }
 
 std::shared_ptr<ArrayData> ExecArrayData::ToArrayData() {
+  assert(false);
   return std::make_shared<ArrayData>(type->Clone(), length, buffers, child_data, null_count, offset);
 }
 

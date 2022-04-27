@@ -525,15 +525,15 @@ static Status SimpleBinary(KernelContext* ctx, const ExecBatch& batch, Datum* ou
   if (batch[0].is_kind_of_array()) {
     if (batch[1].is_kind_of_array()) {
       return Operator::Call(ctx, *batch[0].any_array(), *batch[1].any_array(),
-                            out->mutable_array());
+                            out->mutable_exec_array());
     } else {
       return Operator::Call(ctx, *batch[0].any_array(), *batch[1].any_array(),
-                            out->mutable_array());
+                            out->mutable_exec_array());
     }
   } else {
     if (batch[1].is_kind_of_array()) {
       return Operator::Call(ctx, *batch[0].scalar(), *batch[1].any_array(),
-                            out->mutable_array());
+                            out->mutable_exec_array());
     } else {
       return Operator::Call(ctx, *batch[0].scalar(), *batch[1].scalar(),
                             out->scalar().get());

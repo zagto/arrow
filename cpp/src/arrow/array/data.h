@@ -292,6 +292,8 @@ struct ExecArrayData : public TypedArrayData<DataType *> {
 public:
   using TypedArrayData::TypedArrayData;
   explicit ExecArrayData(ArrayData &regular) {
+    assert(false);
+
     type = regular.type.get();
     *static_cast<ArrayDataBase *>(this) = regular;
   }
