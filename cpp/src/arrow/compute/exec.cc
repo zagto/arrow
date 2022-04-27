@@ -333,7 +333,7 @@ struct NullGeneralization {
   enum type { PERHAPS_NULL, ALL_VALID, ALL_NULL };
 
   static type Get(const Datum& datum) {
-    const auto dtype_id = datum.type()->id();
+    const auto dtype_id = datum.DirectType()->id();
     if (dtype_id == Type::NA) {
       return ALL_NULL;
     }
@@ -343,8 +343,8 @@ struct NullGeneralization {
     if (datum.is_scalar()) {
       return datum.scalar()->is_valid ? ALL_VALID : ALL_NULL;
     }
-    if (datum.is_array()) {
-      const auto& arr = *datum.array();
+    if (datum.is_kind_of_array()) {
+      const auto &arr = *datum.any_array();
       // Do not count the bits if they haven't been counted already
       const int64_t known_null_count = arr.null_count.load();
       if ((known_null_count == 0) || (arr.buffers[0] == NULLPTR)) {
@@ -381,8 +381,8 @@ class NullPropagator {
       }
 
       if (null_generalization != NullGeneralization::ALL_VALID &&
-          datum.kind() == Datum::ARRAY) {
-        arrays_with_nulls_.push_back(datum.array().get());
+          datum.is_kind_of_array()) {
+        arrays_with_nulls_.push_back(datum.any_array());
       }
     }
 
@@ -570,6 +570,10 @@ class KernelExecutorImpl : public KernelExecutor {
     // Resolve the output descriptor for this kernel
     ARROW_ASSIGN_OR_RAISE(
         output_descr_, kernel_->signature->out_type().Resolve(kernel_ctx_, args.inputs));
+
+    // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    // !!!!!!!!!!!!!!!!!!!!!
+    output_descr_.shape = ValueDescr::ARRAY;
 
     return Status::OK();
   }

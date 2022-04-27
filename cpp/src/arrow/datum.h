@@ -216,7 +216,12 @@ struct ARROW_EXPORT Datum {
 
   // TODO: difference do mutable_array()
   const ArrayDataBase *any_array() const {
-    return kind() == Datum::ARRAY ? static_cast<ArrayDataBase *>(array().get()) : exec_array().get();
+    if (kind() == Datum::ARRAY) {
+      return array().get();
+    }
+    assert (kind() == Datum::EXEC_ARRAY);
+    return exec_array().get();
+    //return kind() == Datum::ARRAY ? static_cast<ArrayDataBase *>(array().get()) : exec_array().get();
   }
 
 

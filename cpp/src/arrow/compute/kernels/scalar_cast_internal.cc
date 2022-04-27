@@ -53,9 +53,9 @@ struct CastPrimitive {
     using InT = typename InType::c_type;
 
     StaticCastFunc caster = DoStaticCast<OutT, InT>;
-    if (input.kind() == Datum::ARRAY) {
-      const ArrayDataBase& arr = *input.array();
-      ArrayDataBase* out_arr = out->mutable_array();
+    if (input.is_kind_of_array()) {
+      const ArrayDataBase& arr = *input.any_array();
+      ArrayDataBase* out_arr = out->mutable_any_array();
       caster(arr.buffers[1]->data(), arr.offset, arr.length, out_arr->offset,
              out_arr->buffers[1]->mutable_data());
     } else {

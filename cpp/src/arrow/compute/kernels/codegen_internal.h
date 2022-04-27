@@ -522,17 +522,17 @@ template <typename Operator>
 static Status SimpleBinary(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
   if (batch.length == 0) return Status::OK();
 
-  if (batch[0].kind() == Datum::ARRAY) {
-    if (batch[1].kind() == Datum::ARRAY) {
-      return Operator::Call(ctx, *batch[0].array(), *batch[1].array(),
+  if (batch[0].is_kind_of_array()) {
+    if (batch[1].is_kind_of_array()) {
+      return Operator::Call(ctx, *batch[0].any_array(), *batch[1].any_array(),
                             out->mutable_array());
     } else {
-      return Operator::Call(ctx, *batch[0].array(), *batch[1].scalar(),
+      return Operator::Call(ctx, *batch[0].any_array(), *batch[1].any_array(),
                             out->mutable_array());
     }
   } else {
-    if (batch[1].kind() == Datum::ARRAY) {
-      return Operator::Call(ctx, *batch[0].scalar(), *batch[1].array(),
+    if (batch[1].is_kind_of_array()) {
+      return Operator::Call(ctx, *batch[0].scalar(), *batch[1].any_array(),
                             out->mutable_array());
     } else {
       return Operator::Call(ctx, *batch[0].scalar(), *batch[1].scalar(),
@@ -742,8 +742,8 @@ struct ScalarUnaryNotNullStateful {
   }
 
   Status Exec(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
-    if (batch[0].kind() == Datum::ARRAY) {
-      return ArrayExec<OutType>::Exec(*this, ctx, *batch[0].array(), out);
+    if (batch[0].is_kind_of_array()) {
+      return ArrayExec<OutType>::Exec(*this, ctx, *batch[0].any_array(), out);
     } else {
       return Scalar(ctx, *batch[0].scalar(), out);
     }
@@ -840,14 +840,14 @@ struct ScalarBinary {
   }
 
   static Status Exec(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
-    if (batch[0].kind() == Datum::ARRAY) {
-      if (batch[1].kind() == Datum::ARRAY) {
+    if (batch[0].is_kind_of_array()) {
+      if (batch[1].is_kind_of_array()) {
         return ArrayArray(ctx, *batch[0].any_array(), *batch[1].any_array(), out);
       } else {
         return ArrayScalar(ctx, *batch[0].any_array(), *batch[1].scalar(), out);
       }
     } else {
-      if (batch[1].kind() == Datum::ARRAY) {
+      if (batch[1].is_kind_of_array()) {
         return ScalarArray(ctx, *batch[0].scalar(), *batch[1].any_array(), out);
       } else {
         return ScalarScalar(ctx, *batch[0].scalar(), *batch[1].scalar(), out);
@@ -935,15 +935,15 @@ struct ScalarBinaryNotNullStateful {
   }
 
   Status Exec(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
-    if (batch[0].kind() == Datum::ARRAY) {
-      if (batch[1].kind() == Datum::ARRAY) {
-        return ArrayArray(ctx, *batch[0].array(), *batch[1].array(), out);
+    if (batch[0].is_kind_of_array()) {
+      if (batch[1].is_kind_of_array()) {
+        return ArrayArray(ctx, *batch[0].any_array(), *batch[1].any_array(), out);
       } else {
-        return ArrayScalar(ctx, *batch[0].array(), *batch[1].scalar(), out);
+        return ArrayScalar(ctx, *batch[0].any_array(), *batch[1].scalar(), out);
       }
     } else {
-      if (batch[1].kind() == Datum::ARRAY) {
-        return ScalarArray(ctx, *batch[0].scalar(), *batch[1].array(), out);
+      if (batch[1].is_kind_of_array()) {
+        return ScalarArray(ctx, *batch[0].scalar(), *batch[1].any_array(), out);
       } else {
         return ScalarScalar(ctx, *batch[0].scalar(), *batch[1].scalar(), out);
       }
