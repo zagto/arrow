@@ -631,7 +631,7 @@ struct ScalarUnary {
   }
 
   static Status Exec(KernelContext* ctx, const ExecBatch& batch, Datum* out) {
-    if (batch[0].kind() == Datum::ARRAY) {
+    if (batch[0].is_kind_of_array()) {
       return ExecArray(ctx, *batch[0].any_array(), out);
     } else {
       return ExecScalar(ctx, *batch[0].scalar(), out);

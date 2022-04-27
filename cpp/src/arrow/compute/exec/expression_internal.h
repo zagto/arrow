@@ -53,7 +53,7 @@ inline std::vector<ValueDescr> GetDescriptors(const std::vector<Expression>& exp
 inline std::vector<ValueDescr> GetDescriptors(const std::vector<Datum>& values) {
   std::vector<ValueDescr> descrs(values.size());
   for (size_t i = 0; i < values.size(); ++i) {
-    descrs[i] = values[i].descr();
+    descrs[i] = values[i].DirectType()->Clone(); // TODO
   }
   return descrs;
 }

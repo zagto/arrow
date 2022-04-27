@@ -297,6 +297,7 @@ public:
   }
 
   std::shared_ptr<ExecArrayData> Slice(int64_t offset, int64_t length) const;
+  std::shared_ptr<ExecArrayData> Copy() const { return std::make_shared<ExecArrayData>(*this); }
 
   std::shared_ptr<ArrayData> ToArrayData();
 };

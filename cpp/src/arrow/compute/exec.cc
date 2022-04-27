@@ -313,6 +313,8 @@ bool ExecBatchIterator::Next(ExecBatch* batch) {
       batch->values[i] = args_[i].scalar();
     } else if (args_[i].is_array()) {
       batch->values[i] = args_[i].array()->Slice(position_, iteration_size);
+    } else if (args_[i].is_exec_array()) {
+      batch->values[i] = args_[i].exec_array()->Slice(position_, iteration_size);
     } else {
       const ChunkedArray& carr = *args_[i].chunked_array();
       const auto& chunk = carr.chunk(chunk_indexes_[i]);
@@ -704,7 +706,7 @@ class ScalarExecutor : public KernelExecutorImpl<ScalarKernel> {
       // they know the output will have 0 nulls.  However, this is not compatible
       // with writing into slices.
       if (output_descr_.shape == ValueDescr::ARRAY) {
-        DCHECK(out.array()->buffers[0])
+        DCHECK(out.any_array()->buffers[0])
             << "Null bitmap deleted by kernel but can_write_into_slices = true";
       }
     } else {

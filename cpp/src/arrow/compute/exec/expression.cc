@@ -531,7 +531,7 @@ Result<Datum> ExecuteScalarExpression(const Expression& expr, const ExecBatch& i
       ARROW_ASSIGN_OR_RAISE(
           field, compute::CallFunction("struct_field", {std::move(field)}, &options));
     }
-    if (!field.type()->Equals(param->descr.type)) {
+    if (!field.DirectType()->Equals(param->descr.type)) {
       return Status::Invalid("Referenced field ", expr.ToString(), " was ",
                              field.type()->ToString(), " but should have been ",
                              param->descr.type->ToString());
