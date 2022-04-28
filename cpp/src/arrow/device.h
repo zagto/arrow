@@ -69,7 +69,7 @@ class ARROW_EXPORT Device : public std::enable_shared_from_this<Device>,
   /// The returned instance uses default parameters for this device type's
   /// MemoryManager implementation.  Some devices also allow constructing
   /// MemoryManager instances with non-default parameters.
-  virtual std::shared_ptr<MemoryManager> default_memory_manager() = 0;
+  virtual MemoryManager* default_memory_manager() = 0;
 
  protected:
   ARROW_DISALLOW_COPY_AND_ASSIGN(Device);
@@ -123,20 +123,19 @@ class ARROW_EXPORT MemoryManager : public std::enable_shared_from_this<MemoryMan
   ///
   /// See also the Buffer::Copy shorthand.
   static Result<std::shared_ptr<Buffer>> CopyBuffer(
-      const std::shared_ptr<Buffer>& source, const std::shared_ptr<MemoryManager>& to);
+      const std::shared_ptr<Buffer>& source, MemoryManager *to);
 
   /// \brief Copy a non-owned Buffer to a destination MemoryManager
   ///
   /// This is useful for cases where the source memory area is externally managed
   /// (its lifetime not tied to the source Buffer), otherwise please use CopyBuffer().
-  static Result<std::unique_ptr<Buffer>> CopyNonOwned(
-      const Buffer& source, const std::shared_ptr<MemoryManager>& to);
+  static Result<std::unique_ptr<Buffer>> CopyNonOwned(const Buffer& source, MemoryManager* to);
 
   /// \brief Make a no-copy Buffer view in a destination MemoryManager
   ///
   /// See also the Buffer::View shorthand.
   static Result<std::shared_ptr<Buffer>> ViewBuffer(
-      const std::shared_ptr<Buffer>& source, const std::shared_ptr<MemoryManager>& to);
+      const std::shared_ptr<Buffer>& source, MemoryManager* to);
 
  protected:
   ARROW_DISALLOW_COPY_AND_ASSIGN(MemoryManager);
@@ -148,18 +147,17 @@ class ARROW_EXPORT MemoryManager : public std::enable_shared_from_this<MemoryMan
   // (returning nullptr means unsupported copy / view)
   // In CopyBufferFrom and ViewBufferFrom, the `from` parameter is guaranteed to
   // be equal to `buf->memory_manager()`.
-  virtual Result<std::shared_ptr<Buffer>> CopyBufferFrom(
-      const std::shared_ptr<Buffer>& buf, const std::shared_ptr<MemoryManager>& from);
+  virtual Result<std::shared_ptr<Buffer>> CopyBufferFrom(const std::shared_ptr<Buffer>& buf, MemoryManager *from);
   virtual Result<std::shared_ptr<Buffer>> CopyBufferTo(
-      const std::shared_ptr<Buffer>& buf, const std::shared_ptr<MemoryManager>& to);
+      const std::shared_ptr<Buffer>& buf, MemoryManager *from);
   virtual Result<std::unique_ptr<Buffer>> CopyNonOwnedFrom(
-      const Buffer& buf, const std::shared_ptr<MemoryManager>& from);
+      const Buffer& buf, MemoryManager *from);
   virtual Result<std::unique_ptr<Buffer>> CopyNonOwnedTo(
-      const Buffer& buf, const std::shared_ptr<MemoryManager>& to);
+      const Buffer& buf, MemoryManager *to);
   virtual Result<std::shared_ptr<Buffer>> ViewBufferFrom(
-      const std::shared_ptr<Buffer>& buf, const std::shared_ptr<MemoryManager>& from);
+      const std::shared_ptr<Buffer>& buf, MemoryManager *from);
   virtual Result<std::shared_ptr<Buffer>> ViewBufferTo(
-      const std::shared_ptr<Buffer>& buf, const std::shared_ptr<MemoryManager>& to);
+      const std::shared_ptr<Buffer>& buf, MemoryManager *to);
 
   std::shared_ptr<Device> device_;
 };
@@ -173,7 +171,7 @@ class ARROW_EXPORT CPUDevice : public Device {
   std::string ToString() const override;
   bool Equals(const Device&) const override;
 
-  std::shared_ptr<MemoryManager> default_memory_manager() override;
+  MemoryManager* default_memory_manager() override;
 
   /// \brief Return the global CPUDevice instance
   static std::shared_ptr<Device> Instance();
@@ -181,7 +179,7 @@ class ARROW_EXPORT CPUDevice : public Device {
   /// \brief Create a MemoryManager
   ///
   /// The returned MemoryManager will use the given MemoryPool for allocations.
-  static std::shared_ptr<MemoryManager> memory_manager(MemoryPool* pool);
+  static MemoryManager* memory_manager(MemoryPool* pool);
 
  protected:
   CPUDevice() : Device(true) {}
@@ -200,33 +198,34 @@ class ARROW_EXPORT CPUMemoryManager : public MemoryManager {
   MemoryPool* pool() const { return pool_; }
 
  protected:
+  friend class MemoryPool;
   CPUMemoryManager(const std::shared_ptr<Device>& device, MemoryPool* pool)
       : MemoryManager(device), pool_(pool) {}
 
-  static std::shared_ptr<MemoryManager> Make(const std::shared_ptr<Device>& device,
+  static std::unique_ptr<MemoryManager> Make(const std::shared_ptr<Device>& device,
                                              MemoryPool* pool = default_memory_pool());
 
   Result<std::shared_ptr<Buffer>> CopyBufferFrom(
       const std::shared_ptr<Buffer>& buf,
-      const std::shared_ptr<MemoryManager>& from) override;
+      MemoryManager* from) override;
   Result<std::shared_ptr<Buffer>> CopyBufferTo(
       const std::shared_ptr<Buffer>& buf,
-      const std::shared_ptr<MemoryManager>& to) override;
+      MemoryManager* to) override;
   Result<std::unique_ptr<Buffer>> CopyNonOwnedFrom(
-      const Buffer& buf, const std::shared_ptr<MemoryManager>& from) override;
+      const Buffer& buf, MemoryManager* from) override;
   Result<std::unique_ptr<Buffer>> CopyNonOwnedTo(
-      const Buffer& buf, const std::shared_ptr<MemoryManager>& to) override;
+      const Buffer& buf, MemoryManager* to) override;
   Result<std::shared_ptr<Buffer>> ViewBufferFrom(
       const std::shared_ptr<Buffer>& buf,
-      const std::shared_ptr<MemoryManager>& from) override;
+      MemoryManager* from) override;
   Result<std::shared_ptr<Buffer>> ViewBufferTo(
       const std::shared_ptr<Buffer>& buf,
-      const std::shared_ptr<MemoryManager>& to) override;
+      MemoryManager* to) override;
 
   MemoryPool* pool_;
 
-  friend std::shared_ptr<MemoryManager> CPUDevice::memory_manager(MemoryPool* pool);
-  friend ARROW_EXPORT std::shared_ptr<MemoryManager> default_cpu_memory_manager();
+  friend MemoryManager* CPUDevice::memory_manager(MemoryPool* pool);
+  friend ARROW_EXPORT MemoryManager* default_cpu_memory_manager();
 };
 
 /// \brief Return the default CPU MemoryManager instance
@@ -235,6 +234,6 @@ class ARROW_EXPORT CPUMemoryManager : public MemoryManager {
 /// This function is a faster spelling of
 /// `CPUDevice::Instance()->default_memory_manager()`.
 ARROW_EXPORT
-std::shared_ptr<MemoryManager> default_cpu_memory_manager();
+MemoryManager *default_cpu_memory_manager();
 
 }  // namespace arrow

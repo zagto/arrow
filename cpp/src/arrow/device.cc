@@ -24,6 +24,7 @@
 #include "arrow/io/memory.h"
 #include "arrow/result.h"
 #include "arrow/util/logging.h"
+#include "arrow/memory_pool.h"
 
 namespace arrow {
 
@@ -44,8 +45,8 @@ Device::~Device() {}
   }
 
 Result<std::shared_ptr<Buffer>> MemoryManager::CopyBuffer(
-    const std::shared_ptr<Buffer>& buf, const std::shared_ptr<MemoryManager>& to) {
-  const auto& from = buf->memory_manager();
+    const std::shared_ptr<Buffer>& buf, MemoryManager* to) {
+  const auto from = buf->memory_manager();
   auto maybe_buffer = to->CopyBufferFrom(buf, from);
   COPY_BUFFER_RETURN(maybe_buffer, to);
   // `to` doesn't support copying from `from`, try the other way
@@ -75,7 +76,7 @@ Result<std::shared_ptr<Buffer>> MemoryManager::CopyBuffer(
 }
 
 Result<std::unique_ptr<Buffer>> MemoryManager::CopyNonOwned(
-    const Buffer& buf, const std::shared_ptr<MemoryManager>& to) {
+    const Buffer& buf, MemoryManager* to) {
   const auto& from = buf.memory_manager();
   auto maybe_buffer = to->CopyNonOwnedFrom(buf, from);
   COPY_BUFFER_RETURN(maybe_buffer, to);
@@ -88,11 +89,11 @@ Result<std::unique_ptr<Buffer>> MemoryManager::CopyNonOwned(
 }
 
 Result<std::shared_ptr<Buffer>> MemoryManager::ViewBuffer(
-    const std::shared_ptr<Buffer>& buf, const std::shared_ptr<MemoryManager>& to) {
+    const std::shared_ptr<Buffer>& buf, MemoryManager* to) {
   if (buf->memory_manager() == to) {
     return buf;
   }
-  const auto& from = buf->memory_manager();
+  auto* from = buf->memory_manager();
   auto maybe_buffer = to->ViewBufferFrom(buf, from);
   COPY_BUFFER_RETURN(maybe_buffer, to);
   // `to` doesn't support viewing from `from`, try the other way
@@ -107,32 +108,31 @@ Result<std::shared_ptr<Buffer>> MemoryManager::ViewBuffer(
 #undef COPY_BUFFER_SUCCESS
 
 Result<std::shared_ptr<Buffer>> MemoryManager::CopyBufferFrom(
-    const std::shared_ptr<Buffer>& buf, const std::shared_ptr<MemoryManager>& from) {
+    const std::shared_ptr<Buffer>& buf, MemoryManager *from) {
   return nullptr;
 }
 
 Result<std::shared_ptr<Buffer>> MemoryManager::CopyBufferTo(
-    const std::shared_ptr<Buffer>& buf, const std::shared_ptr<MemoryManager>& to) {
+    const std::shared_ptr<Buffer>& buf, MemoryManager* to) {
   return nullptr;
 }
 
 Result<std::unique_ptr<Buffer>> MemoryManager::CopyNonOwnedFrom(
-    const Buffer& buf, const std::shared_ptr<MemoryManager>& from) {
+    const Buffer& buf, MemoryManager* from) {
   return nullptr;
 }
 
 Result<std::unique_ptr<Buffer>> MemoryManager::CopyNonOwnedTo(
-    const Buffer& buf, const std::shared_ptr<MemoryManager>& to) {
+    const Buffer& buf, MemoryManager* to) {
   return nullptr;
 }
 
 Result<std::shared_ptr<Buffer>> MemoryManager::ViewBufferFrom(
-    const std::shared_ptr<Buffer>& buf, const std::shared_ptr<MemoryManager>& from) {
+    const std::shared_ptr<Buffer>& buf, MemoryManager* from) {
   return nullptr;
 }
 
-Result<std::shared_ptr<Buffer>> MemoryManager::ViewBufferTo(
-    const std::shared_ptr<Buffer>& buf, const std::shared_ptr<MemoryManager>& to) {
+Result<std::shared_ptr<Buffer>> MemoryManager::ViewBufferTo(const std::shared_ptr<Buffer>& buf, MemoryManager* to) {
   return nullptr;
 }
 
@@ -143,9 +143,9 @@ namespace {
 const char kCPUDeviceTypeName[] = "arrow::CPUDevice";
 }
 
-std::shared_ptr<MemoryManager> CPUMemoryManager::Make(
+std::unique_ptr<MemoryManager> CPUMemoryManager::Make(
     const std::shared_ptr<Device>& device, MemoryPool* pool) {
-  return std::shared_ptr<MemoryManager>(new CPUMemoryManager(device, pool));
+  return std::unique_ptr<MemoryManager>(new CPUMemoryManager(device, pool));
 }
 
 Result<std::shared_ptr<io::RandomAccessFile>> CPUMemoryManager::GetBufferReader(
@@ -163,12 +163,12 @@ Result<std::unique_ptr<Buffer>> CPUMemoryManager::AllocateBuffer(int64_t size) {
 }
 
 Result<std::shared_ptr<Buffer>> CPUMemoryManager::CopyBufferFrom(
-    const std::shared_ptr<Buffer>& buf, const std::shared_ptr<MemoryManager>& from) {
+    const std::shared_ptr<Buffer>& buf, MemoryManager* from) {
   return CopyNonOwnedFrom(*buf, from);
 }
 
 Result<std::unique_ptr<Buffer>> CPUMemoryManager::CopyNonOwnedFrom(
-    const Buffer& buf, const std::shared_ptr<MemoryManager>& from) {
+    const Buffer& buf, MemoryManager* from) {
   if (!from->is_cpu()) {
     return nullptr;
   }
@@ -180,7 +180,7 @@ Result<std::unique_ptr<Buffer>> CPUMemoryManager::CopyNonOwnedFrom(
 }
 
 Result<std::shared_ptr<Buffer>> CPUMemoryManager::ViewBufferFrom(
-    const std::shared_ptr<Buffer>& buf, const std::shared_ptr<MemoryManager>& from) {
+    const std::shared_ptr<Buffer>& buf, MemoryManager* from) {
   if (!from->is_cpu()) {
     return nullptr;
   }
@@ -188,12 +188,12 @@ Result<std::shared_ptr<Buffer>> CPUMemoryManager::ViewBufferFrom(
 }
 
 Result<std::shared_ptr<Buffer>> CPUMemoryManager::CopyBufferTo(
-    const std::shared_ptr<Buffer>& buf, const std::shared_ptr<MemoryManager>& to) {
+    const std::shared_ptr<Buffer>& buf, MemoryManager* to) {
   return CopyNonOwnedTo(*buf, to);
 }
 
 Result<std::unique_ptr<Buffer>> CPUMemoryManager::CopyNonOwnedTo(
-    const Buffer& buf, const std::shared_ptr<MemoryManager>& to) {
+    const Buffer& buf, MemoryManager* to) {
   if (!to->is_cpu()) {
     return nullptr;
   }
@@ -205,17 +205,15 @@ Result<std::unique_ptr<Buffer>> CPUMemoryManager::CopyNonOwnedTo(
 }
 
 Result<std::shared_ptr<Buffer>> CPUMemoryManager::ViewBufferTo(
-    const std::shared_ptr<Buffer>& buf, const std::shared_ptr<MemoryManager>& to) {
+    const std::shared_ptr<Buffer>& buf, MemoryManager* to) {
   if (!to->is_cpu()) {
     return nullptr;
   }
   return buf;
 }
 
-std::shared_ptr<MemoryManager> default_cpu_memory_manager() {
-  static auto instance =
-      CPUMemoryManager::Make(CPUDevice::Instance(), default_memory_pool());
-  return instance;
+MemoryManager *default_cpu_memory_manager() {
+  return default_memory_pool()->cpu_memory_manager.get();
 }
 
 std::shared_ptr<Device> CPUDevice::Instance() {
@@ -231,11 +229,11 @@ bool CPUDevice::Equals(const Device& other) const {
   return other.type_name() == kCPUDeviceTypeName;
 }
 
-std::shared_ptr<MemoryManager> CPUDevice::memory_manager(MemoryPool* pool) {
-  return CPUMemoryManager::Make(Instance(), pool);
+MemoryManager* CPUDevice::memory_manager(MemoryPool* pool) {
+  return pool->cpu_memory_manager.get();
 }
 
-std::shared_ptr<MemoryManager> CPUDevice::default_memory_manager() {
+MemoryManager *CPUDevice::default_memory_manager() {
   return default_cpu_memory_manager();
 }
 

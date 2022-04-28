@@ -60,15 +60,15 @@ class ARROW_EXPORT Buffer {
     SetMemoryManager(default_cpu_memory_manager());
   }
 
-  Buffer(const uint8_t* data, int64_t size, std::shared_ptr<MemoryManager> mm,
+  Buffer(const uint8_t* data, int64_t size, MemoryManager *mm,
          std::shared_ptr<Buffer> parent = NULLPTR)
       : is_mutable_(false), data_(data), size_(size), capacity_(size), parent_(parent) {
-    SetMemoryManager(std::move(mm));
+    SetMemoryManager(mm);
   }
 
-  Buffer(uintptr_t address, int64_t size, std::shared_ptr<MemoryManager> mm,
+  Buffer(uintptr_t address, int64_t size, MemoryManager *mm,
          std::shared_ptr<Buffer> parent = NULLPTR)
-      : Buffer(reinterpret_cast<const uint8_t*>(address), size, std::move(mm),
+      : Buffer(reinterpret_cast<const uint8_t*>(address), size, mm,
                std::move(parent)) {}
 
   /// \brief Construct from string_view without copying memory
@@ -233,7 +233,7 @@ class ARROW_EXPORT Buffer {
 
   const std::shared_ptr<Device>& device() const { return memory_manager_->device(); }
 
-  const std::shared_ptr<MemoryManager>& memory_manager() const { return memory_manager_; }
+  MemoryManager *memory_manager() const { return memory_manager_; }
 
   std::shared_ptr<Buffer> parent() const { return parent_; }
 
@@ -253,14 +253,14 @@ class ARROW_EXPORT Buffer {
   /// The buffer contents will be copied into a new buffer allocated by the
   /// given MemoryManager.  This function supports cross-device copies.
   static Result<std::shared_ptr<Buffer>> Copy(std::shared_ptr<Buffer> source,
-                                              const std::shared_ptr<MemoryManager>& to);
+                                              MemoryManager* to);
 
   /// \brief Copy a non-owned buffer
   ///
   /// This is useful for cases where the source memory area is externally managed
   /// (its lifetime not tied to the source Buffer), otherwise please use Copy().
-  static Result<std::unique_ptr<Buffer>> CopyNonOwned(
-      const Buffer& source, const std::shared_ptr<MemoryManager>& to);
+  static Result<std::unique_ptr<Buffer>> CopyNonOwned(const Buffer& source,
+                                                      MemoryManager* to);
 
   /// \brief View buffer
   ///
@@ -274,14 +274,14 @@ class ARROW_EXPORT Buffer {
   /// nullptr is returned.  An error can be returned if some low-level
   /// operation fails (such as an out-of-memory condition).
   static Result<std::shared_ptr<Buffer>> View(std::shared_ptr<Buffer> source,
-                                              const std::shared_ptr<MemoryManager>& to);
+                                              MemoryManager *to);
 
   /// \brief View or copy buffer
   ///
   /// Try to view buffer contents on the given MemoryManager's device, but
   /// fall back to copying if a no-copy view isn't supported.
   static Result<std::shared_ptr<Buffer>> ViewOrCopy(
-      std::shared_ptr<Buffer> source, const std::shared_ptr<MemoryManager>& to);
+      std::shared_ptr<Buffer> source, MemoryManager* to);
 
  protected:
   bool is_mutable_;
@@ -295,14 +295,14 @@ class ARROW_EXPORT Buffer {
 
  private:
   // private so that subclasses are forced to call SetMemoryManager()
-  std::shared_ptr<MemoryManager> memory_manager_;
+  MemoryManager *memory_manager_ = NULLPTR;
 
  protected:
   void CheckMutable() const;
   void CheckCPU() const;
 
-  void SetMemoryManager(std::shared_ptr<MemoryManager> mm) {
-    memory_manager_ = std::move(mm);
+  void SetMemoryManager(MemoryManager *mm) {
+    memory_manager_ = mm;
     is_cpu_ = memory_manager_->is_cpu();
   }
 
@@ -389,8 +389,8 @@ class ARROW_EXPORT MutableBuffer : public Buffer {
     is_mutable_ = true;
   }
 
-  MutableBuffer(uint8_t* data, const int64_t size, std::shared_ptr<MemoryManager> mm)
-      : Buffer(data, size, std::move(mm)) {
+  MutableBuffer(uint8_t* data, const int64_t size, MemoryManager *mm)
+      : Buffer(data, size, mm) {
     is_mutable_ = true;
   }
 
@@ -445,8 +445,8 @@ class ARROW_EXPORT ResizableBuffer : public MutableBuffer {
 
  protected:
   ResizableBuffer(uint8_t* data, int64_t size) : MutableBuffer(data, size) {}
-  ResizableBuffer(uint8_t* data, int64_t size, std::shared_ptr<MemoryManager> mm)
-      : MutableBuffer(data, size, std::move(mm)) {}
+  ResizableBuffer(uint8_t* data, int64_t size, MemoryManager *mm)
+      : MutableBuffer(data, size, mm) {}
 };
 
 /// \defgroup buffer-allocation-functions Functions for allocating buffers

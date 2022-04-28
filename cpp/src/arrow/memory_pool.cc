@@ -892,8 +892,8 @@ std::vector<std::string> SupportedMemoryBackendNames() {
 /// A Buffer whose lifetime is tied to a particular MemoryPool
 class PoolBuffer final : public ResizableBuffer {
  public:
-  explicit PoolBuffer(std::shared_ptr<MemoryManager> mm, MemoryPool* pool)
-      : ResizableBuffer(nullptr, 0, std::move(mm)), pool_(pool) {}
+  explicit PoolBuffer(MemoryManager* mm, MemoryPool* pool)
+      : ResizableBuffer(nullptr, 0, mm), pool_(pool) {}
 
   ~PoolBuffer() override {
     // Avoid calling pool_->Free if the global pools are destroyed
@@ -950,25 +950,25 @@ class PoolBuffer final : public ResizableBuffer {
   }
 
   static std::shared_ptr<PoolBuffer> MakeShared(MemoryPool* pool) {
-    std::shared_ptr<MemoryManager> mm;
+    MemoryManager* mm;
     if (pool == nullptr) {
       pool = default_memory_pool();
       mm = default_cpu_memory_manager();
     } else {
       mm = CPUDevice::memory_manager(pool);
     }
-    return std::make_shared<PoolBuffer>(std::move(mm), pool);
+    return std::make_shared<PoolBuffer>(mm, pool);
   }
 
   static std::unique_ptr<PoolBuffer> MakeUnique(MemoryPool* pool) {
-    std::shared_ptr<MemoryManager> mm;
+    MemoryManager* mm;
     if (pool == nullptr) {
       pool = default_memory_pool();
       mm = default_cpu_memory_manager();
     } else {
       mm = CPUDevice::memory_manager(pool);
     }
-    return std::unique_ptr<PoolBuffer>(new PoolBuffer(std::move(mm), pool));
+    return std::unique_ptr<PoolBuffer>(new PoolBuffer(mm, pool));
   }
 
  private:

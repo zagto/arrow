@@ -25,6 +25,7 @@
 #include "arrow/status.h"
 #include "arrow/type_fwd.h"
 #include "arrow/util/visibility.h"
+#include "arrow/device.h"
 
 namespace arrow {
 
@@ -107,8 +108,12 @@ class ARROW_EXPORT MemoryPool {
   /// The name of the backend used by this MemoryPool (e.g. "system" or "jemalloc").
   virtual std::string backend_name() const = 0;
 
+  std::unique_ptr<MemoryManager> cpu_memory_manager;
+
  protected:
-  MemoryPool() = default;
+  MemoryPool() {
+    cpu_memory_manager = CPUMemoryManager::Make(CPUDevice::Instance(), this);
+  }
 };
 
 class ARROW_EXPORT LoggingMemoryPool : public MemoryPool {
